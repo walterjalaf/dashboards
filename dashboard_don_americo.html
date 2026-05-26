@@ -29,6 +29,28 @@
   }
   .btn-hdr:hover { background: rgba(59,130,246,0.45); color: #fff; }
 
+  /* Filter bar */
+  .filter-bar {
+    background: #111827;
+    border-bottom: 1px solid #1e293b;
+    padding: 10px 40px;
+    display: none;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; color: #475569; white-space: nowrap; }
+  .filter-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  .filter-sep { width: 1px; height: 22px; background: #1e293b; flex-shrink: 0; }
+  .pill {
+    background: transparent; border: 1px solid #334155; color: #64748b;
+    border-radius: 20px; padding: 3px 12px; font-size: 0.72rem; cursor: pointer;
+    font-family: inherit; transition: all .12s; line-height: 1.6;
+  }
+  .pill:hover { border-color: #3b82f6; color: #93c5fd; }
+  .pill.active { background: rgba(59,130,246,0.18); border-color: #3b82f6; color: #93c5fd; font-weight: 600; }
+
   .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
 
   /* KPI Cards */
@@ -199,6 +221,19 @@
   </div>
 </div>
 
+<!-- Barra de filtros -->
+<div id="filterBar" class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-label">Año</span>
+    <div id="yearPills" class="filter-pills"></div>
+  </div>
+  <div class="filter-sep"></div>
+  <div class="filter-group">
+    <span class="filter-label">Mes</span>
+    <div id="monthPills" class="filter-pills"></div>
+  </div>
+</div>
+
 <div class="container">
 
   <!-- KPI Cards (generadas por JS) -->
@@ -300,15 +335,22 @@
 const STORAGE_KEY = 'donamerico_drive_cfg';
 const DRIVE_API   = 'https://www.googleapis.com/drive/v3/files';
 const XLSX_MIME   = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const GSHEET_MIME = 'application/vnd.google-apps.spreadsheet';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
+const isWorkbook  = f => f.mimeType === XLSX_MIME || f.mimeType === GSHEET_MIME;
+
+const MES_ABREV_LABELS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
 
 let CONFIG = {
   apiKey:   'AIzaSyAduvvGyXxyntmoMJQR_pnczbqatXW8q0c',
-  folderId: '1rmFu6z1Uxa-MHM8XNR9lb0UuebVLSfvC'
+  folderId: '1f3ttYW0S_U1YIiVufXQol3Pq7rfeQQxI'
 };
 
-// Datos agregados de todos los meses
+// Dataset completo (todos los meses cargados)
 let D = {};
+
+// Estado de filtros: year=null → todos; months=null → todos
+let FILTER = { year: null, months: null };
 
 // Instancias de charts (para destroy antes de recrear)
 let _charts = {};
@@ -352,7 +394,7 @@ async function testConnection() {
   CONFIG.apiKey = apiKey; CONFIG.folderId = folder;
   try {
     const files = await listXlsxInFolder(folder);
-    el.textContent = `OK — ${files.length} archivo(s) .xlsx encontrado(s)`;
+    el.textContent = `OK — ${files.length} archivo(s) encontrado(s)`;
     el.className = 'cfg-test ok';
   } catch(err) {
     el.textContent = 'Error: ' + err.message; el.className = 'cfg-test error';
@@ -381,43 +423,91 @@ function showStatus(msg, type) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DRIVE: listar archivos xlsx (con descenso a subcarpeta)
+// DRIVE: listar archivos xlsx/gsheet (recursivo hasta 3 niveles)
+// Soporta: root → RESUMENES MENSUALES → 2025/2026 → archivos
 // ═══════════════════════════════════════════════════════════════
-async function listXlsxInFolder(folderId) {
+async function listXlsxInFolder(folderId, depth) {
+  depth = depth || 0;
+  const MAX_DEPTH = 3;
+
   const q    = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const flds = encodeURIComponent('files(id,name,mimeType,modifiedTime)');
-  const url  = `${DRIVE_API}?q=${q}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=100&orderBy=name`;
+  const url  = `${DRIVE_API}?q=${q}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=200&orderBy=name`;
   const res  = await fetch(url);
   if (!res.ok) {
+    if (depth > 0) return []; // subcarpeta inaccesible → saltar en silencio
     const body = await res.json().catch(() => ({}));
     const msg  = (body.error && body.error.message) || res.statusText;
     if (res.status === 403) throw new Error('Sin acceso. Verificá que la carpeta sea pública y la API Key válida.');
     if (res.status === 404) throw new Error('Carpeta no encontrada. Verificá el Folder ID.');
     throw new Error(`Drive API ${res.status}: ${msg}`);
   }
-  const files = (await res.json()).files || [];
-
-  // Recopilar xlsx de la raíz Y de subcarpetas (no cortar al primer xlsx encontrado,
-  // porque puede haber archivos no-mensuales en la raíz y los resúmenes en una subcarpeta)
-  const xlsx       = files.filter(f => f.mimeType === XLSX_MIME);
+  const files      = (await res.json()).files || [];
+  const workbooks  = files.filter(isWorkbook);
   const subfolders = files.filter(f => f.mimeType === FOLDER_MIME);
-  const nested = await Promise.all(subfolders.map(async sf => {
-    const q2   = encodeURIComponent(`'${sf.id}' in parents and trashed=false`);
-    const url2 = `${DRIVE_API}?q=${q2}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=100&orderBy=name`;
-    const r2   = await fetch(url2);
-    if (!r2.ok) return [];
-    return ((await r2.json()).files || []).filter(f => f.mimeType === XLSX_MIME);
-  }));
-  return [...xlsx, ...nested.flat()];
+
+  if (depth >= MAX_DEPTH || !subfolders.length) return workbooks;
+
+  const nested = await Promise.all(subfolders.map(sf => listXlsxInFolder(sf.id, depth + 1)));
+  return [...workbooks, ...nested.flat()];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHEETS API v4: leer GSheet como workbook SheetJS-compatible
+// (Sheets API acepta API key para archivos públicos — el export
+//  URL requiere OAuth incluso para archivos "Anyone with link")
+// ═══════════════════════════════════════════════════════════════
+async function fetchGSheetAsWorkbook(fileId) {
+  const key = encodeURIComponent(CONFIG.apiKey);
+
+  // 1. Obtener nombres de hojas
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?key=${key}&fields=sheets.properties.title`;
+  const metaRes = await fetch(metaUrl);
+  if (!metaRes.ok) {
+    const body = await metaRes.json().catch(() => ({}));
+    const msg  = (body.error && body.error.message) || metaRes.statusText;
+    throw new Error(`Sheets API ${metaRes.status}: ${msg}`);
+  }
+  const meta       = await metaRes.json();
+  const sheetNames = (meta.sheets || []).map(s => s.properties.title);
+  if (!sheetNames.length) throw new Error('Sin hojas en el documento');
+
+  // 2. Leer valores de cada hoja con UNFORMATTED_VALUE (números como números, no strings formateados)
+  const wb = { SheetNames: [], Sheets: {} };
+  for (const name of sheetNames) {
+    const range = encodeURIComponent(name);
+    const url   = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${range}?key=${key}&valueRenderOption=UNFORMATTED_VALUE`;
+    const res   = await fetch(url);
+    if (!res.ok) continue;
+    const data  = await res.json();
+    const rows  = data.values || [];
+    if (!rows.length) continue;
+
+    // Construir worksheet compatible con SheetJS
+    const ws  = {};
+    let maxC  = 0;
+    rows.forEach((row, r) => {
+      if (row.length > maxC) maxC = row.length;
+      row.forEach((v, c) => {
+        const addr  = XLSX.utils.encode_cell({ r, c });
+        ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's' };
+      });
+    });
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: Math.max(0, maxC - 1) } });
+    wb.SheetNames.push(name);
+    wb.Sheets[name] = ws;
+  }
+  return wb;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // DRIVE: descargar workbook xlsx
 // ═══════════════════════════════════════════════════════════════
-async function fetchXlsxWorkbook(fileId) {
-  const url = `${DRIVE_API}/${fileId}?alt=media&key=${encodeURIComponent(CONFIG.apiKey)}`;
+async function fetchXlsxWorkbook(file) {
+  if (file.mimeType === GSHEET_MIME) return fetchGSheetAsWorkbook(file.id);
+  const url = `${DRIVE_API}/${file.id}?alt=media&key=${encodeURIComponent(CONFIG.apiKey)}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Descarga ${res.status}`);
+  if (!res.ok) throw new Error(`Descarga ${res.status} — ${file.name}`);
   const buf = await res.arrayBuffer();
   return XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
 }
@@ -434,11 +524,9 @@ function parseMonthFromName(name) {
   const norm = (name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   let month = null;
 
-  // Nombre completo
   for (const [k, v] of Object.entries(MES_ES)) {
     if (norm.includes(k)) { month = v; break; }
   }
-  // Abreviatura 3 chars (ene, feb, mar … dic) si no hubo match completo
   if (!month) {
     for (const [k, v] of Object.entries(MES_ABREV)) {
       if (new RegExp(`(?<![a-z])${k}(?![a-z])`).test(norm)) { month = v; break; }
@@ -446,7 +534,6 @@ function parseMonthFromName(name) {
   }
   if (!month) return null;
 
-  // Año 4 dígitos primero; si no, 2 dígitos (20-29 → 2020-2029)
   const ym4 = norm.match(/\b(20\d{2})\b/);
   const ym2 = !ym4 && norm.match(/\b(2[0-9])\b/);
   const year = ym4 ? parseInt(ym4[1]) : (ym2 ? 2000 + parseInt(ym2[1]) : null);
@@ -462,7 +549,6 @@ function parseMonthFromName(name) {
 // ═══════════════════════════════════════════════════════════════
 function parseMonthlySummary(wb) {
 
-  // Parsea un valor numérico desde string o número (soporta formatos AR y US)
   const parseARS = v => {
     if (v == null || v === '' || v === '-') return 0;
     if (typeof v === 'number') return Math.abs(v);
@@ -471,27 +557,25 @@ function parseMonthlySummary(wb) {
     const dotCount   = (s.match(/\./g)  || []).length;
     const commaCount = (s.match(/,/g)   || []).length;
     if (commaCount > 0 && dotCount > 0) {
-      // Ambos separadores: el último indica el decimal
       if (s.lastIndexOf('.') > s.lastIndexOf(',')) {
-        s = s.replace(/,/g, '');                       // US: 1,234.56
+        s = s.replace(/,/g, '');
       } else {
-        s = s.replace(/\./g, '').replace(',', '.');    // AR: 1.234,56
+        s = s.replace(/\./g, '').replace(',', '.');
       }
     } else if (commaCount > 0) {
       const parts = s.split(',');
       if (parts.length === 2 && parts[1].length <= 2) {
-        s = parts[0] + '.' + parts[1];                // coma decimal
+        s = parts[0] + '.' + parts[1];
       } else {
-        s = s.replace(/,/g, '');                       // coma de miles
+        s = s.replace(/,/g, '');
       }
     } else if (dotCount > 1) {
-      s = s.replace(/\./g, '');                        // puntos de miles
+      s = s.replace(/\./g, '');
     }
     const n = parseFloat(s);
     return isNaN(n) ? 0 : Math.abs(n);
   };
 
-  // Construye filas por hoja: [{label, raw}]
   const sheetRows = {};
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name];
@@ -513,23 +597,43 @@ function parseMonthlySummary(wb) {
     sheetRows[name] = rows;
   }
 
+  const allLabelsA = new Set();
+  for (const rows of Object.values(sheetRows)) {
+    for (const cells of rows) {
+      if (cells[0]?.label && cells[0].label.length > 2) allLabelsA.add(cells[0].label);
+    }
+  }
+  console.log('[Parser] Hojas:', wb.SheetNames);
+  console.log('[Parser] Labels col-A:', [...allLabelsA].slice(0, 60));
+
   const allRows = Object.values(sheetRows).flat();
 
-  // Busca el primer valor positivo en las celdas siguientes al match en la misma fila
-  const findVal = patterns => {
+  const findValInRows = (rows, patterns) => {
     const test = lbl => patterns.some(p => (p instanceof RegExp) ? p.test(lbl) : lbl === p);
-    for (const cells of allRows) {
-      for (let i = 0; i < cells.length; i++) {
-        if (test(cells[i].label)) {
-          for (let j = i + 1; j < cells.length; j++) {
-            const raw = cells[j].raw;
-            if (raw != null && raw !== '') {
-              const n = parseARS(raw);
-              if (n > 0) return n;
-            }
+    for (let ri = 0; ri < rows.length; ri++) {
+      const cells = rows[ri];
+      for (let ci = 0; ci < cells.length; ci++) {
+        if (!test(cells[ci].label)) continue;
+        for (let j = ci + 1; j < cells.length; j++) {
+          const raw = cells[j].raw;
+          if (raw != null && raw !== '') { const n = parseARS(raw); if (n > 0) return n; }
+        }
+        for (let rj = ri + 1; rj <= Math.min(ri + 5, rows.length - 1); rj++) {
+          const nr = rows[rj];
+          for (let cj = ci; cj <= Math.min(ci + 2, (nr?.length || 0) - 1); cj++) {
+            const raw = nr[cj]?.raw;
+            if (raw != null && raw !== '') { const n = parseARS(raw); if (n > 0) return n; }
           }
         }
       }
+    }
+    return null;
+  };
+
+  const findVal = patterns => {
+    for (const rows of Object.values(sheetRows)) {
+      const v = findValInRows(rows, patterns);
+      if (v !== null) return v;
     }
     return 0;
   };
@@ -545,13 +649,12 @@ function parseMonthlySummary(wb) {
   const sueldos       = findVal([/^EMPLEADOS$/, /^SUELDOS$/, /^8\) SUELDOS$/]);
   const resultado     = findVal([/^RESULTADO ECONOMICO$/]);
 
-  // Para compras: tomar el valor más alto que sea >= costoVentas (compra total > costo de venta)
   let compras = costoVentas;
   {
     const found = [];
     for (const cells of allRows) {
       for (let i = 0; i < cells.length; i++) {
-        if (/^COMPRAS$/.test(cells[i].label)) {
+        if (/^(COMPRAS|COMPRA DE MERCADERIA|COMPRA MERCADERIA)$/.test(cells[i].label)) {
           for (let j = i + 1; j < cells.length; j++) {
             const raw = cells[j].raw;
             if (raw != null && raw !== '') {
@@ -567,7 +670,6 @@ function parseMonthlySummary(wb) {
     else if (found.length) compras = Math.max(...found);
   }
 
-  // Rubros de ventas: buscar en cada hoja por ancla CLASIF.*VENTAS.*RUBROS
   const rubros = {};
   const stopRe = /FORMAS DE COBROS|TOTAL EGRESOS|EGRESOS POR RUBROS|TOTAL COBROS|FINANCIERO/;
   outer: for (const rows of Object.values(sheetRows)) {
@@ -582,7 +684,6 @@ function parseMonthlySummary(wb) {
         const nm = rawName.trim();
         if (!nm || nm.length < 2) continue;
         if (/^(TOTAL|CLASIF|OK\s*$)/i.test(nm)) continue;
-        // Primer valor numérico > 100 en la fila (saltar porcentajes)
         for (let j = 1; j < cells.length; j++) {
           const v = cells[j].raw;
           if (v != null && v !== '') {
@@ -595,6 +696,7 @@ function parseMonthlySummary(wb) {
     }
   }
 
+  console.log('[Parser] Valores extraídos:', { ingresos, costoVentas, gastosEmpresa, impuestos, servicios, bancarios, mercadopago, posnet, sueldos, resultado, compras });
   return { ingresos, costoVentas, gastosEmpresa, impuestos, servicios,
            bancarios, mercadopago, posnet, sueldos, resultado, compras, rubros };
 }
@@ -605,10 +707,16 @@ function parseMonthlySummary(wb) {
 async function loadAllMonths() {
   showStatus('Conectando…', 'info');
   const files = await listXlsxInFolder(CONFIG.folderId);
-  if (!files.length) { showStatus('Sin archivos .xlsx en la carpeta.', 'error'); return false; }
+  if (!files.length) { showStatus('Sin archivos en la carpeta. Verificá que la carpeta y los archivos estén compartidos públicamente.', 'error'); return false; }
 
   console.log('[DonAmerico] Archivos encontrados:', files.map(f => f.name));
-  const annotated = files
+
+  const summaryFiles = files.filter(f =>
+    (f.name || '').toUpperCase().includes('RESUMEN MENSUAL')
+  );
+  console.log('[DonAmerico] Archivos de resumen mensual:', summaryFiles.map(f => f.name));
+
+  const annotated = summaryFiles
     .map(f => ({ ...f, info: parseMonthFromName(f.name) }))
     .filter(f => f.info)
     .sort((a, b) => a.info.year !== b.info.year
@@ -621,35 +729,143 @@ async function loadAllMonths() {
   for (let i = 0; i < annotated.length; i++) {
     const f = annotated[i];
     showStatus(`Cargando ${f.info.label} (${i + 1}/${annotated.length})…`, 'info');
-    const wb     = await fetchXlsxWorkbook(f.id);
-    const parsed = parseMonthlySummary(wb);
-    results.push({ label: f.info.label, ...parsed });
+    try {
+      const wb     = await fetchXlsxWorkbook(f);
+      const parsed = parseMonthlySummary(wb);
+      results.push({ label: f.info.label, year: f.info.year, month: f.info.month, ...parsed });
+    } catch(err) {
+      console.warn(`[DonAmerico] Omitiendo ${f.info.label}:`, err.message);
+    }
   }
 
-  D.meses         = results.map(r => r.label);
-  D.ingresos      = results.map(r => r.ingresos);
-  D.costoVentas   = results.map(r => r.costoVentas);
-  D.gastosEmpresa = results.map(r => r.gastosEmpresa);
-  D.impuestos     = results.map(r => r.impuestos);
-  D.servicios     = results.map(r => r.servicios);
-  D.bancarios     = results.map(r => r.bancarios);
-  D.mercadopago   = results.map(r => r.mercadopago);
-  D.posnet        = results.map(r => r.posnet);
-  D.sueldos       = results.map(r => r.sueldos);
-  D.resultado     = results.map(r => r.resultado);
-  D.compras       = results.map(r => r.compras);
-  D.egresos       = results.map((r, i) =>
-    r.costoVentas + r.gastosEmpresa + r.impuestos + r.servicios +
-    r.bancarios   + r.mercadopago   + r.posnet    + r.sueldos
-  );
-  // Rubros: unión de todos los meses
-  const allRubros = {};
-  results.forEach(r => Object.entries(r.rubros).forEach(([k, v]) => { allRubros[k] = (allRubros[k] || 0) + v; }));
-  D.rubros        = allRubros;
-  D.rubrosPerMonth= results.map(r => r.rubros);
+  if (!results.length) { showStatus('No se pudo leer ningún archivo. Verificá que los Google Sheets estén compartidos como "Cualquier persona con el enlace".', 'error'); return false; }
+
+  // Guardar raw completo y metadatos para filtrado
+  D.raw   = results;
+  D.years = [...new Set(results.map(r => r.year))].sort();
+
+  // Resetear filtros al recargar
+  FILTER.year   = null;
+  FILTER.months = null;
+
+  // Poblar D a partir del raw completo
+  _populateD(results);
 
   showStatus(`Listo — ${results.length} mes(es) cargado(s)`, 'ok');
   return true;
+}
+
+// Pobla D.* con el array de filas recibido
+function _populateD(rows) {
+  D.meses         = rows.map(r => r.label);
+  D.ingresos      = rows.map(r => r.ingresos);
+  D.costoVentas   = rows.map(r => r.costoVentas);
+  D.gastosEmpresa = rows.map(r => r.gastosEmpresa);
+  D.impuestos     = rows.map(r => r.impuestos);
+  D.servicios     = rows.map(r => r.servicios);
+  D.bancarios     = rows.map(r => r.bancarios);
+  D.mercadopago   = rows.map(r => r.mercadopago);
+  D.posnet        = rows.map(r => r.posnet);
+  D.sueldos       = rows.map(r => r.sueldos);
+  D.resultado     = rows.map(r => r.resultado);
+  D.compras       = rows.map(r => r.compras);
+  D.egresos       = rows.map(r =>
+    r.costoVentas + r.gastosEmpresa + r.impuestos + r.servicios +
+    r.bancarios   + r.mercadopago   + r.posnet    + r.sueldos
+  );
+  const allRubros = {};
+  rows.forEach(r => Object.entries(r.rubros).forEach(([k, v]) => { allRubros[k] = (allRubros[k] || 0) + v; }));
+  D.rubros         = allRubros;
+  D.rubrosPerMonth = rows.map(r => r.rubros);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILTROS
+// ═══════════════════════════════════════════════════════════════
+function applyFilter() {
+  if (!D.raw) return;
+
+  let rows = D.raw;
+  if (FILTER.year !== null)   rows = rows.filter(r => r.year  === FILTER.year);
+  if (FILTER.months !== null) rows = rows.filter(r => FILTER.months.has(r.month));
+  if (!rows.length) rows = D.raw; // fallback: nada seleccionado → mostrar todo
+
+  _populateD(rows);
+  renderAll();
+}
+
+function setYearFilter(year) {
+  FILTER.year   = year;
+  FILTER.months = null; // resetear mes al cambiar año
+  applyFilter();
+}
+
+function toggleMonthFilter(m) {
+  // Universo de meses disponibles para el año actual
+  const base = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
+  const allM  = new Set(base.map(r => r.month));
+
+  if (FILTER.months === null) {
+    // Todos activos → desactivar todos menos este
+    FILTER.months = new Set([m]);
+  } else {
+    if (FILTER.months.has(m)) {
+      FILTER.months.delete(m);
+      if (FILTER.months.size === 0) FILTER.months = null; // si queda vacío → todos
+    } else {
+      FILTER.months.add(m);
+      if (FILTER.months.size === allM.size) FILTER.months = null; // si están todos → null
+    }
+  }
+  applyFilter();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: barra de filtros
+// ═══════════════════════════════════════════════════════════════
+function renderFilterBar() {
+  if (!D.raw || !D.raw.length) {
+    document.getElementById('filterBar').style.display = 'none';
+    return;
+  }
+  document.getElementById('filterBar').style.display = 'flex';
+
+  // ── Pills de año ─────────────────────────────────────────────
+  const yearCont = document.getElementById('yearPills');
+  yearCont.innerHTML = '';
+
+  const mkYearBtn = (label, value) => {
+    const b = document.createElement('button');
+    b.className = 'pill' + (FILTER.year === value ? ' active' : '');
+    b.textContent = label;
+    b.onclick = () => setYearFilter(value);
+    return b;
+  };
+  yearCont.appendChild(mkYearBtn('Todos', null));
+  D.years.forEach(y => yearCont.appendChild(mkYearBtn(String(y), y)));
+
+  // ── Pills de mes ─────────────────────────────────────────────
+  const base      = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
+  const monthNums = [...new Set(base.map(r => r.month))].sort((a, b) => a - b);
+
+  const monthCont = document.getElementById('monthPills');
+  monthCont.innerHTML = '';
+
+  // "Todos" reset
+  const allMBtn = document.createElement('button');
+  allMBtn.className = 'pill' + (FILTER.months === null ? ' active' : '');
+  allMBtn.textContent = 'Todos';
+  allMBtn.onclick = () => { FILTER.months = null; applyFilter(); };
+  monthCont.appendChild(allMBtn);
+
+  monthNums.forEach(m => {
+    const b = document.createElement('button');
+    const active = FILTER.months === null || FILTER.months.has(m);
+    b.className = 'pill' + (active ? ' active' : '');
+    b.textContent = MES_ABREV_LABELS[m - 1];
+    b.onclick = () => toggleMonthFilter(m);
+    monthCont.appendChild(b);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -709,7 +925,6 @@ function renderTableResumen() {
     return `<tr${cls ? ` class="${cls}"` : ''}><td>${lbl}</td>${cells}<td>${bold ? `<strong>${fmt(total)}</strong>` : fmt(total)}</td></tr>`;
   };
 
-  const n = D.meses.length;
   let html = '<table><thead><tr><th>Concepto</th>';
   D.meses.forEach(m => { html += `<th>${m}</th>`; });
   html += '<th>TOTAL</th></tr></thead><tbody>';
@@ -725,12 +940,10 @@ function renderTableResumen() {
   html += buildRow('— Sueldos',         D.sueldos);
   html += buildRow('Total Egresos',     D.egresos, 'total-row');
 
-  // Resultado
   const totalResult = sum(D.resultado);
   const resCells    = D.resultado.map(v => `<td class="${v >= 0 ? 'positive' : 'negative'}">${fmt(v)}</td>`).join('');
   html += `<tr class="result-row"><td><strong>Resultado Económico</strong></td>${resCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${fmt(totalResult)}</strong></td></tr>`;
 
-  // Margen
   const totalMargen = sum(D.ingresos) > 0 ? (totalResult / sum(D.ingresos) * 100).toFixed(1) : 0;
   const margenCells = D.resultado.map((r, i) => {
     const m = D.ingresos[i] > 0 ? (r / D.ingresos[i] * 100).toFixed(1) : '0.0';
@@ -755,7 +968,6 @@ function renderTableRubros() {
   const fmt  = v => '$' + new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(v));
   const sumI = D.ingresos.reduce((a, b) => a + b, 0);
 
-  // Ordenar rubros por total descendente
   const rubrosSorted = Object.entries(D.rubros)
     .sort(([, a], [, b]) => b - a)
     .map(([rubro, total]) => ({
@@ -763,7 +975,6 @@ function renderTableRubros() {
       pct: sumI > 0 ? Math.round(total / sumI * 100) : 0
     }));
 
-  // Actualizar subtítulo de la sección
   const firstMes = D.meses[0], lastMes = D.meses[D.meses.length - 1];
   document.getElementById('rubrosTitle').textContent = `Ventas por Rubro (${firstMes} – ${lastMes})`;
 
@@ -788,7 +999,6 @@ function renderTableRubros() {
 // RENDER: Charts
 // ═══════════════════════════════════════════════════════════════
 function renderCharts() {
-  // Destruir instancias previas
   Object.values(_charts).forEach(c => { if (c) c.destroy(); });
   _charts = {};
 
@@ -963,6 +1173,7 @@ function renderHeader() {
 // RENDER ALL
 // ═══════════════════════════════════════════════════════════════
 function renderAll() {
+  renderFilterBar();
   renderKPIs();
   renderCharts();
   renderTableResumen();
