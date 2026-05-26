@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Económico - Supermercado Don Américo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; }
+
+  .header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
+    padding: 22px 40px;
+    border-bottom: 3px solid #3b82f6;
+  }
+  .header-top { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  .header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: 0.5px; }
+  .header p  { color: #93c5fd; margin-top: 4px; font-size: 0.9rem; }
+  .header-controls {
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-top: 4px;
+  }
+  #file-status { font-size: 0.78rem; color: #93c5fd; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn-hdr {
+    background: rgba(59,130,246,0.25); border: 1px solid #3b82f6; color: #93c5fd;
+    border-radius: 8px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer;
+    font-family: inherit; transition: background .15s, color .15s;
+  }
+  .btn-hdr:hover { background: rgba(59,130,246,0.45); color: #fff; }
+
+  .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
+
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+  .kpi-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 20px 22px;
+    border: 1px solid #334155;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .kpi-card.blue::before  { background: #3b82f6; }
+  .kpi-card.red::before   { background: #ef4444; }
+  .kpi-card.green::before { background: #22c55e; }
+  .kpi-card.yellow::before{ background: #f59e0b; }
+
+  .kpi-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 8px; }
+  .kpi-value { font-size: 1.55rem; font-weight: 700; }
+  .kpi-value.blue   { color: #60a5fa; }
+  .kpi-value.red    { color: #f87171; }
+  .kpi-value.green  { color: #4ade80; }
+  .kpi-value.yellow { color: #fbbf24; }
+  .kpi-sub { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+
+  /* Chart layout */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+    margin-bottom: 22px;
+  }
+  .chart-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 22px;
+    border: 1px solid #334155;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #94a3b8;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #334155;
+  }
+  .chart-container { position: relative; }
+
+  /* Table */
+  .table-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 22px;
+    border: 1px solid #334155;
+    margin-bottom: 22px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th {
+    background: #0f172a;
+    padding: 10px 14px;
+    text-align: right;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  th:first-child { text-align: left; }
+  td { padding: 9px 14px; text-align: right; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  td:first-child { text-align: left; color: #e2e8f0; font-weight: 500; }
+  tr:hover td { background: #263348; }
+  tr.total-row td { background: #172033; font-weight: 700; color: #60a5fa; border-top: 2px solid #3b82f6; }
+  tr.result-row td { font-weight: 700; font-size: 0.9rem; }
+  tr.result-row td.positive { color: #4ade80; }
+  tr.result-row td.negative { color: #f87171; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .badge.positive { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .badge.negative { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  .section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #93c5fd;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::before { content: ''; display: block; width: 4px; height: 18px; background: #3b82f6; border-radius: 2px; }
+
+  /* Empty state */
+  .empty-state { padding: 32px; text-align: center; color: #475569; font-size: 0.88rem; }
+
+  /* Modal de configuración */
+  .cfg-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+    display: none; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .cfg-overlay.open { display: flex; }
+  .cfg-box {
+    background: #1e293b; border: 1px solid #334155; border-top: 2px solid #3b82f6;
+    border-radius: 14px; width: min(500px, 92vw);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.65);
+  }
+  .cfg-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #334155; }
+  .cfg-header h2 { font-size: 0.92rem; font-weight: 700; color: #e2e8f0; margin: 0; }
+  .cfg-close { background: transparent; border: 0; color: #64748b; font-size: 1.3rem; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .cfg-close:hover { color: #e2e8f0; }
+  .cfg-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .cfg-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid #334155; }
+  .cfg-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; color: #94a3b8; }
+  .cfg-input {
+    width: 100%; color: #e2e8f0; background: #0f172a; border: 1px solid #334155;
+    border-radius: 7px; padding: 8px 12px; font-size: 0.78rem; font-family: inherit;
+  }
+  .cfg-input:focus { outline: none; border-color: #3b82f6; }
+  .cfg-input::placeholder { color: #475569; }
+  .cfg-help {
+    font-size: 0.7rem; color: #94a3b8; line-height: 1.55;
+    background: rgba(59,130,246,0.1); border-left: 2px solid #3b82f6;
+    padding: 8px 12px; border-radius: 4px;
+  }
+  .cfg-test { font-size: 0.75rem; min-height: 1.1em; }
+  .cfg-test.ok    { color: #4ade80; }
+  .cfg-test.error { color: #f87171; }
+  .btn-primary { background: #3b82f6; color: #fff; border: none; border-radius: 7px; padding: 7px 16px; font-size: 0.78rem; cursor: pointer; font-weight: 700; font-family: inherit; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-secondary { background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 7px; padding: 7px 14px; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
+  .btn-secondary:hover { background: #263348; color: #e2e8f0; }
+
+  footer { text-align: center; padding: 20px; color: #475569; font-size: 0.75rem; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div>
+      <h1>Supermercado Don Américo — Análisis Económico</h1>
+      <p id="headerPeriod">Conectando a Google Drive…</p>
+    </div>
+    <div class="header-controls">
+      <span id="file-status"></span>
+      <button class="btn-hdr" onclick="recargar()">&#x21bb; Recargar</button>
+      <button class="btn-hdr" onclick="openConfigModal()">&#9881; Drive</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- KPI Cards (generadas por JS) -->
+  <div id="kpiGrid" class="kpi-grid">
+    <div class="kpi-card blue"><div class="kpi-label">Cargando…</div><div class="kpi-value blue">—</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Cargando…</div><div class="kpi-value red">—</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Cargando…</div><div class="kpi-value green">—</div></div>
+    <div class="kpi-card yellow"><div class="kpi-label">Cargando…</div><div class="kpi-value yellow">—</div></div>
+  </div>
+
+  <!-- Gráfico principal -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Evolución Mensual: Ventas vs Egresos vs Resultado Económico</div>
+    <div class="chart-container" style="height:320px;">
+      <canvas id="chartEvolucion"></canvas>
+    </div>
+  </div>
+
+  <!-- Dos gráficos en fila -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Resultado Económico por Mes (ARS)</div>
+      <div class="chart-container" style="height:280px;">
+        <canvas id="chartResultado"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Composición de Egresos por Rubro (promedio %)</div>
+      <div class="chart-container" style="height:280px;">
+        <canvas id="chartDonut"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compras de mercadería -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Compra de Mercadería vs Costo de Reposición Mensual (ARS)</div>
+    <div class="chart-container" style="height:300px;">
+      <canvas id="chartCompras"></canvas>
+    </div>
+  </div>
+
+  <!-- Gastos por rubro apilados -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Egresos por Rubro — Detalle Mensual (ARS)</div>
+    <div class="chart-container" style="height:340px;">
+      <canvas id="chartEgresosRubro"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabla resumen mensual (generada por JS) -->
+  <div class="section-title">Resumen Mensual Completo</div>
+  <div id="tableResumen" class="table-card">
+    <div class="empty-state">Cargando datos desde Google Drive…</div>
+  </div>
+
+  <!-- Tabla ventas por rubro (generada por JS) -->
+  <div class="section-title" id="rubrosTitle">Ventas por Rubro</div>
+  <div id="tableRubros" class="table-card">
+    <div class="empty-state">Cargando datos desde Google Drive…</div>
+  </div>
+
+</div>
+
+<footer id="footerText">Dashboard Económico — Supermercado Don Américo | CIAF</footer>
+
+<!-- Modal de configuración Drive -->
+<div id="cfgOverlay" class="cfg-overlay" onclick="if(event.target===this)closeConfigModal()">
+  <div class="cfg-box">
+    <div class="cfg-header">
+      <h2>Configurar Google Drive</h2>
+      <button class="cfg-close" onclick="closeConfigModal()">&times;</button>
+    </div>
+    <div class="cfg-body">
+      <label class="cfg-label">API Key de Google
+        <input type="password" id="cfgApiKey" class="cfg-input" autocomplete="off" spellcheck="false" placeholder="AIza…">
+      </label>
+      <label class="cfg-label">Folder ID de Google Drive
+        <input type="text" id="cfgFolderId" class="cfg-input" autocomplete="off" spellcheck="false" placeholder="1rmFu6z1Uxa…">
+      </label>
+      <p class="cfg-help">
+        Folder ID: parte final de <strong>drive.google.com/drive/folders/ESTE_TRAMO</strong><br>
+        La carpeta debe estar compartida como "Cualquier persona con el enlace — Lector".
+      </p>
+      <div id="cfgTestResult" class="cfg-test"></div>
+    </div>
+    <div class="cfg-foot">
+      <button class="btn-secondary" onclick="testConnection()">Probar conexión</button>
+      <button class="btn-secondary" onclick="closeConfigModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveAndConnect()">Guardar y conectar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════════
+const STORAGE_KEY = 'donamerico_drive_cfg';
+const DRIVE_API   = 'https://www.googleapis.com/drive/v3/files';
+const XLSX_MIME   = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+let CONFIG = {
+  apiKey:   'AIzaSyAduvvGyXxyntmoMJQR_pnczbqatXW8q0c',
+  folderId: '1rmFu6z1Uxa-MHM8XNR9lb0UuebVLSfvC'
+};
+
+// Datos agregados de todos los meses
+let D = {};
+
+// Instancias de charts (para destroy antes de recrear)
+let _charts = {};
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIG: load / save / modal
+// ═══════════════════════════════════════════════════════════════
+function loadConfig() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (s.apiKey)   CONFIG.apiKey   = s.apiKey;
+    if (s.folderId) CONFIG.folderId = s.folderId;
+  } catch(e) {}
+}
+
+function saveConfig(cfg) {
+  CONFIG.apiKey   = cfg.apiKey;
+  CONFIG.folderId = cfg.folderId;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch(e) {}
+}
+
+function openConfigModal() {
+  document.getElementById('cfgApiKey').value    = CONFIG.apiKey   || '';
+  document.getElementById('cfgFolderId').value  = CONFIG.folderId || '';
+  document.getElementById('cfgTestResult').textContent = '';
+  document.getElementById('cfgTestResult').className  = 'cfg-test';
+  document.getElementById('cfgOverlay').classList.add('open');
+}
+function closeConfigModal() {
+  document.getElementById('cfgOverlay').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfigModal(); });
+
+async function testConnection() {
+  const el     = document.getElementById('cfgTestResult');
+  const apiKey = document.getElementById('cfgApiKey').value.trim();
+  const folder = document.getElementById('cfgFolderId').value.trim();
+  if (!apiKey || !folder) { el.textContent = 'Completá ambos campos'; el.className = 'cfg-test error'; return; }
+  el.textContent = 'Probando…'; el.className = 'cfg-test';
+  const prev = { ...CONFIG };
+  CONFIG.apiKey = apiKey; CONFIG.folderId = folder;
+  try {
+    const files = await listXlsxInFolder(folder);
+    el.textContent = `OK — ${files.length} archivo(s) .xlsx encontrado(s)`;
+    el.className = 'cfg-test ok';
+  } catch(err) {
+    el.textContent = 'Error: ' + err.message; el.className = 'cfg-test error';
+    Object.assign(CONFIG, prev);
+  }
+}
+
+async function saveAndConnect() {
+  const el     = document.getElementById('cfgTestResult');
+  const apiKey = document.getElementById('cfgApiKey').value.trim();
+  const folder = document.getElementById('cfgFolderId').value.trim();
+  if (!apiKey || !folder) { el.textContent = 'Completá API Key y Folder ID'; el.className = 'cfg-test error'; return; }
+  saveConfig({ apiKey, folderId: folder });
+  closeConfigModal();
+  await bootstrap();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATUS
+// ═══════════════════════════════════════════════════════════════
+function showStatus(msg, type) {
+  const el = document.getElementById('file-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === 'ok' ? '#4ade80' : type === 'error' ? '#f87171' : '#93c5fd';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRIVE: listar archivos xlsx (con descenso a subcarpeta)
+// ═══════════════════════════════════════════════════════════════
+async function listXlsxInFolder(folderId) {
+  const q    = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const flds = encodeURIComponent('files(id,name,mimeType,modifiedTime)');
+  const url  = `${DRIVE_API}?q=${q}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=100&orderBy=name`;
+  const res  = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg  = (body.error && body.error.message) || res.statusText;
+    if (res.status === 403) throw new Error('Sin acceso. Verificá que la carpeta sea pública y la API Key válida.');
+    if (res.status === 404) throw new Error('Carpeta no encontrada. Verificá el Folder ID.');
+    throw new Error(`Drive API ${res.status}: ${msg}`);
+  }
+  const files = (await res.json()).files || [];
+
+  // Recopilar xlsx de la raíz Y de subcarpetas (no cortar al primer xlsx encontrado,
+  // porque puede haber archivos no-mensuales en la raíz y los resúmenes en una subcarpeta)
+  const xlsx       = files.filter(f => f.mimeType === XLSX_MIME);
+  const subfolders = files.filter(f => f.mimeType === FOLDER_MIME);
+  const nested = await Promise.all(subfolders.map(async sf => {
+    const q2   = encodeURIComponent(`'${sf.id}' in parents and trashed=false`);
+    const url2 = `${DRIVE_API}?q=${q2}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=100&orderBy=name`;
+    const r2   = await fetch(url2);
+    if (!r2.ok) return [];
+    return ((await r2.json()).files || []).filter(f => f.mimeType === XLSX_MIME);
+  }));
+  return [...xlsx, ...nested.flat()];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRIVE: descargar workbook xlsx
+// ═══════════════════════════════════════════════════════════════
+async function fetchXlsxWorkbook(fileId) {
+  const url = `${DRIVE_API}/${fileId}?alt=media&key=${encodeURIComponent(CONFIG.apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Descarga ${res.status}`);
+  const buf = await res.arrayBuffer();
+  return XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DETECCIÓN DE MES EN NOMBRE DE ARCHIVO
+// ═══════════════════════════════════════════════════════════════
+const MES_ES = { enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,
+                 julio:7,agosto:8,septiembre:9,octubre:10,noviembre:11,diciembre:12 };
+const MES_ABREV = { ene:1,feb:2,mar:3,abr:4,may:5,jun:6,
+                    jul:7,ago:8,sep:9,set:9,oct:10,nov:11,dic:12 };
+
+function parseMonthFromName(name) {
+  const norm = (name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  let month = null;
+
+  // Nombre completo
+  for (const [k, v] of Object.entries(MES_ES)) {
+    if (norm.includes(k)) { month = v; break; }
+  }
+  // Abreviatura 3 chars (ene, feb, mar … dic) si no hubo match completo
+  if (!month) {
+    for (const [k, v] of Object.entries(MES_ABREV)) {
+      if (new RegExp(`(?<![a-z])${k}(?![a-z])`).test(norm)) { month = v; break; }
+    }
+  }
+  if (!month) return null;
+
+  // Año 4 dígitos primero; si no, 2 dígitos (20-29 → 2020-2029)
+  const ym4 = norm.match(/\b(20\d{2})\b/);
+  const ym2 = !ym4 && norm.match(/\b(2[0-9])\b/);
+  const year = ym4 ? parseInt(ym4[1]) : (ym2 ? 2000 + parseInt(ym2[1]) : null);
+  if (!year) return null;
+
+  const key  = Object.keys(MES_ES).find(k => MES_ES[k] === month);
+  const abbr = key.substring(0, 3).toUpperCase();
+  return { year, month, label: `${abbr} ${String(year).slice(2)}` };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PARSER: resumen mensual desde workbook xlsx
+// ═══════════════════════════════════════════════════════════════
+function parseMonthlySummary(wb) {
+
+  // Parsea un valor numérico desde string o número (soporta formatos AR y US)
+  const parseARS = v => {
+    if (v == null || v === '' || v === '-') return 0;
+    if (typeof v === 'number') return Math.abs(v);
+    let s = String(v).replace(/"/g, '').replace(/[$\s]/g, '');
+    if (!s || s === '-' || s === '$-') return 0;
+    const dotCount   = (s.match(/\./g)  || []).length;
+    const commaCount = (s.match(/,/g)   || []).length;
+    if (commaCount > 0 && dotCount > 0) {
+      // Ambos separadores: el último indica el decimal
+      if (s.lastIndexOf('.') > s.lastIndexOf(',')) {
+        s = s.replace(/,/g, '');                       // US: 1,234.56
+      } else {
+        s = s.replace(/\./g, '').replace(',', '.');    // AR: 1.234,56
+      }
+    } else if (commaCount > 0) {
+      const parts = s.split(',');
+      if (parts.length === 2 && parts[1].length <= 2) {
+        s = parts[0] + '.' + parts[1];                // coma decimal
+      } else {
+        s = s.replace(/,/g, '');                       // coma de miles
+      }
+    } else if (dotCount > 1) {
+      s = s.replace(/\./g, '');                        // puntos de miles
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : Math.abs(n);
+  };
+
+  // Construye filas por hoja: [{label, raw}]
+  const sheetRows = {};
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    if (!ws['!ref']) continue;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const rows  = [];
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      const row = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        const raw  = cell ? cell.v : null;
+        const label = raw != null
+          ? String(raw).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+          : '';
+        row.push({ label, raw });
+      }
+      if (row.some(x => x.raw != null)) rows.push(row);
+    }
+    sheetRows[name] = rows;
+  }
+
+  const allRows = Object.values(sheetRows).flat();
+
+  // Busca el primer valor positivo en las celdas siguientes al match en la misma fila
+  const findVal = patterns => {
+    const test = lbl => patterns.some(p => (p instanceof RegExp) ? p.test(lbl) : lbl === p);
+    for (const cells of allRows) {
+      for (let i = 0; i < cells.length; i++) {
+        if (test(cells[i].label)) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const raw = cells[j].raw;
+            if (raw != null && raw !== '') {
+              const n = parseARS(raw);
+              if (n > 0) return n;
+            }
+          }
+        }
+      }
+    }
+    return 0;
+  };
+
+  const ingresos      = findVal([/^ECONOMICO VENTAS$/, /^TOTAL INGRESOS$/, /^VENTAS$/]);
+  const costoVentas   = findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
+  const gastosEmpresa = findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
+  const impuestos     = findVal([/^IMPUESTOS$/, /^3\) IMPUESTOS$/]);
+  const servicios     = findVal([/^SERVICIOS$/, /^4\) SERVICIOS$/]);
+  const bancarios     = findVal([/^GASTOS Y COMISIONES BANCARIAS$/, /^5\) GASTOS Y COMISIONES BANCARIAS$/]);
+  const mercadopago   = findVal([/^GASTOS Y COMISIONES MERCADO PAGO$/, /^6\) GASTOS Y COMISIONES MERCADO PAGO$/]);
+  const posnet        = findVal([/^GASTOS Y COMISIONES POSNET\s*$/, /^7\) GASTOS Y COMISIONES POSNET\s*$/]);
+  const sueldos       = findVal([/^EMPLEADOS$/, /^SUELDOS$/, /^8\) SUELDOS$/]);
+  const resultado     = findVal([/^RESULTADO ECONOMICO$/]);
+
+  // Para compras: tomar el valor más alto que sea >= costoVentas (compra total > costo de venta)
+  let compras = costoVentas;
+  {
+    const found = [];
+    for (const cells of allRows) {
+      for (let i = 0; i < cells.length; i++) {
+        if (/^COMPRAS$/.test(cells[i].label)) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const raw = cells[j].raw;
+            if (raw != null && raw !== '') {
+              const n = parseARS(raw);
+              if (n > 0) { found.push(n); break; }
+            }
+          }
+        }
+      }
+    }
+    const big = found.filter(n => n >= costoVentas);
+    if (big.length) compras = Math.max(...big);
+    else if (found.length) compras = Math.max(...found);
+  }
+
+  // Rubros de ventas: buscar en cada hoja por ancla CLASIF.*VENTAS.*RUBROS
+  const rubros = {};
+  const stopRe = /FORMAS DE COBROS|TOTAL EGRESOS|EGRESOS POR RUBROS|TOTAL COBROS|FINANCIERO/;
+  outer: for (const rows of Object.values(sheetRows)) {
+    for (let ri = 0; ri < rows.length; ri++) {
+      if (!/CLASIF.*VENTAS.*RUBROS/.test(rows[ri][0]?.label || '')) continue;
+      for (let rj = ri + 1; rj < Math.min(ri + 80, rows.length); rj++) {
+        const cells = rows[rj];
+        const fl    = cells[0]?.label || '';
+        if (stopRe.test(fl)) break;
+        const rawName = cells[0]?.raw;
+        if (!rawName || typeof rawName !== 'string') continue;
+        const nm = rawName.trim();
+        if (!nm || nm.length < 2) continue;
+        if (/^(TOTAL|CLASIF|OK\s*$)/i.test(nm)) continue;
+        // Primer valor numérico > 100 en la fila (saltar porcentajes)
+        for (let j = 1; j < cells.length; j++) {
+          const v = cells[j].raw;
+          if (v != null && v !== '') {
+            const n = parseARS(v);
+            if (n > 100) { rubros[nm] = n; break; }
+          }
+        }
+      }
+      break outer;
+    }
+  }
+
+  return { ingresos, costoVentas, gastosEmpresa, impuestos, servicios,
+           bancarios, mercadopago, posnet, sueldos, resultado, compras, rubros };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ORQUESTADOR: cargar y agregar todos los meses
+// ═══════════════════════════════════════════════════════════════
+async function loadAllMonths() {
+  showStatus('Conectando…', 'info');
+  const files = await listXlsxInFolder(CONFIG.folderId);
+  if (!files.length) { showStatus('Sin archivos .xlsx en la carpeta.', 'error'); return false; }
+
+  console.log('[DonAmerico] Archivos encontrados:', files.map(f => f.name));
+  const annotated = files
+    .map(f => ({ ...f, info: parseMonthFromName(f.name) }))
+    .filter(f => f.info)
+    .sort((a, b) => a.info.year !== b.info.year
+      ? a.info.year - b.info.year
+      : a.info.month - b.info.month);
+
+  if (!annotated.length) { showStatus('Sin archivos con mes+año detectables en el nombre.', 'error'); return false; }
+
+  const results = [];
+  for (let i = 0; i < annotated.length; i++) {
+    const f = annotated[i];
+    showStatus(`Cargando ${f.info.label} (${i + 1}/${annotated.length})…`, 'info');
+    const wb     = await fetchXlsxWorkbook(f.id);
+    const parsed = parseMonthlySummary(wb);
+    results.push({ label: f.info.label, ...parsed });
+  }
+
+  D.meses         = results.map(r => r.label);
+  D.ingresos      = results.map(r => r.ingresos);
+  D.costoVentas   = results.map(r => r.costoVentas);
+  D.gastosEmpresa = results.map(r => r.gastosEmpresa);
+  D.impuestos     = results.map(r => r.impuestos);
+  D.servicios     = results.map(r => r.servicios);
+  D.bancarios     = results.map(r => r.bancarios);
+  D.mercadopago   = results.map(r => r.mercadopago);
+  D.posnet        = results.map(r => r.posnet);
+  D.sueldos       = results.map(r => r.sueldos);
+  D.resultado     = results.map(r => r.resultado);
+  D.compras       = results.map(r => r.compras);
+  D.egresos       = results.map((r, i) =>
+    r.costoVentas + r.gastosEmpresa + r.impuestos + r.servicios +
+    r.bancarios   + r.mercadopago   + r.posnet    + r.sueldos
+  );
+  // Rubros: unión de todos los meses
+  const allRubros = {};
+  results.forEach(r => Object.entries(r.rubros).forEach(([k, v]) => { allRubros[k] = (allRubros[k] || 0) + v; }));
+  D.rubros        = allRubros;
+  D.rubrosPerMonth= results.map(r => r.rubros);
+
+  showStatus(`Listo — ${results.length} mes(es) cargado(s)`, 'ok');
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: KPIs
+// ═══════════════════════════════════════════════════════════════
+function renderKPIs() {
+  const sum  = arr => arr.reduce((a, b) => a + b, 0);
+  const fmtM = v => '$' + (v / 1_000_000).toFixed(1) + 'M';
+
+  const totalVentas  = sum(D.ingresos);
+  const totalEgresos = sum(D.egresos);
+  const totalResult  = sum(D.resultado);
+  const avgVentas    = totalVentas  / D.meses.length;
+  const avgEgresos   = totalEgresos / D.meses.length;
+  const avgMargen    = totalVentas > 0 ? (totalResult / totalVentas * 100).toFixed(1) : '0';
+  const n            = D.meses.length;
+
+  const bestIdx    = D.resultado.indexOf(Math.max(...D.resultado));
+  const bestMes    = D.meses[bestIdx];
+  const bestResult = D.resultado[bestIdx];
+  const bestVentas = D.ingresos[bestIdx];
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card blue">
+      <div class="kpi-label">Ventas Totales (${n} meses)</div>
+      <div class="kpi-value blue">${fmtM(totalVentas)}</div>
+      <div class="kpi-sub">Promedio mensual: ${fmtM(avgVentas)}</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Egresos Totales (${n} meses)</div>
+      <div class="kpi-value red">${fmtM(totalEgresos)}</div>
+      <div class="kpi-sub">Promedio mensual: ${fmtM(avgEgresos)}</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Resultado Acumulado</div>
+      <div class="kpi-value green">${fmtM(totalResult)}</div>
+      <div class="kpi-sub">Margen promedio: ${avgMargen}%</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">Mejor Mes</div>
+      <div class="kpi-value yellow">${bestMes}</div>
+      <div class="kpi-sub">Resultado: ${fmtM(bestResult)} | Ventas: ${fmtM(bestVentas)}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: Tabla resumen mensual
+// ═══════════════════════════════════════════════════════════════
+function renderTableResumen() {
+  const fmt = v => '$' + new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(v));
+  const sum = arr => arr.reduce((a, b) => a + b, 0);
+
+  const buildRow = (label, arr, cls = '', bold = false) => {
+    const total = sum(arr);
+    const cells = arr.map(v => `<td>${fmt(v)}</td>`).join('');
+    const lbl   = bold ? `<strong>${label}</strong>` : label;
+    return `<tr${cls ? ` class="${cls}"` : ''}><td>${lbl}</td>${cells}<td>${bold ? `<strong>${fmt(total)}</strong>` : fmt(total)}</td></tr>`;
+  };
+
+  const n = D.meses.length;
+  let html = '<table><thead><tr><th>Concepto</th>';
+  D.meses.forEach(m => { html += `<th>${m}</th>`; });
+  html += '<th>TOTAL</th></tr></thead><tbody>';
+
+  html += buildRow('Total Ingresos',    D.ingresos);
+  html += buildRow('— Costo de Ventas', D.costoVentas);
+  html += buildRow('— Gastos de Empresa', D.gastosEmpresa);
+  html += buildRow('— Impuestos',       D.impuestos);
+  html += buildRow('— Servicios',       D.servicios);
+  html += buildRow('— G. Bancarios',    D.bancarios);
+  html += buildRow('— G. Mercado Pago', D.mercadopago);
+  html += buildRow('— G. Posnet',       D.posnet);
+  html += buildRow('— Sueldos',         D.sueldos);
+  html += buildRow('Total Egresos',     D.egresos, 'total-row');
+
+  // Resultado
+  const totalResult = sum(D.resultado);
+  const resCells    = D.resultado.map(v => `<td class="${v >= 0 ? 'positive' : 'negative'}">${fmt(v)}</td>`).join('');
+  html += `<tr class="result-row"><td><strong>Resultado Económico</strong></td>${resCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${fmt(totalResult)}</strong></td></tr>`;
+
+  // Margen
+  const totalMargen = sum(D.ingresos) > 0 ? (totalResult / sum(D.ingresos) * 100).toFixed(1) : 0;
+  const margenCells = D.resultado.map((r, i) => {
+    const m = D.ingresos[i] > 0 ? (r / D.ingresos[i] * 100).toFixed(1) : '0.0';
+    return `<td class="${r >= 0 ? 'positive' : 'negative'}">${m}%</td>`;
+  }).join('');
+  html += `<tr class="result-row"><td>Margen Neto</td>${margenCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${totalMargen}%</strong></td></tr>`;
+
+  html += '</tbody></table>';
+  document.getElementById('tableResumen').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: Tabla ventas por rubro
+// ═══════════════════════════════════════════════════════════════
+function renderTableRubros() {
+  if (!D.rubrosPerMonth || !D.rubrosPerMonth.length || !Object.keys(D.rubros).length) {
+    document.getElementById('tableRubros').innerHTML =
+      '<div class="empty-state">Sin datos de rubros de ventas en los archivos. Verificá que el workbook tenga la sección "CLASIF. DE VENTAS POR RUBROS".</div>';
+    return;
+  }
+
+  const fmt  = v => '$' + new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(v));
+  const sumI = D.ingresos.reduce((a, b) => a + b, 0);
+
+  // Ordenar rubros por total descendente
+  const rubrosSorted = Object.entries(D.rubros)
+    .sort(([, a], [, b]) => b - a)
+    .map(([rubro, total]) => ({
+      rubro, total,
+      pct: sumI > 0 ? Math.round(total / sumI * 100) : 0
+    }));
+
+  // Actualizar subtítulo de la sección
+  const firstMes = D.meses[0], lastMes = D.meses[D.meses.length - 1];
+  document.getElementById('rubrosTitle').textContent = `Ventas por Rubro (${firstMes} – ${lastMes})`;
+
+  let html = '<table><thead><tr><th>Rubro</th>';
+  D.meses.forEach(m => { html += `<th>${m}</th>`; });
+  html += '<th>% Prom.</th></tr></thead><tbody>';
+
+  rubrosSorted.forEach(({ rubro, pct }) => {
+    html += `<tr><td>${rubro}</td>`;
+    D.rubrosPerMonth.forEach(m => {
+      const v = m[rubro] || 0;
+      html += `<td>${v > 0 ? fmt(v) : '—'}</td>`;
+    });
+    html += `<td>${pct}%</td></tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tableRubros').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: Charts
+// ═══════════════════════════════════════════════════════════════
+function renderCharts() {
+  // Destruir instancias previas
+  Object.values(_charts).forEach(c => { if (c) c.destroy(); });
+  _charts = {};
+
+  const fmt       = v => '$' + (v / 1_000_000).toFixed(1) + 'M';
+  const gridColor = 'rgba(255,255,255,0.06)';
+  const tickColor = '#64748b';
+
+  // ── Chart 1: Evolución Ventas / Egresos / Resultado ──────────
+  _charts.evol = new Chart(document.getElementById('chartEvolucion'), {
+    type: 'bar',
+    data: {
+      labels: D.meses,
+      datasets: [
+        { label: 'Total Ingresos', data: D.ingresos, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 1, order: 2 },
+        { label: 'Total Egresos',  data: D.egresos,  backgroundColor: 'rgba(239,68,68,0.6)',  borderColor: '#ef4444', borderWidth: 1, order: 3 },
+        { label: 'Resultado Económico', data: D.resultado, type: 'line', borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.15)', borderWidth: 2.5, pointBackgroundColor: '#22c55e',
+          pointRadius: 5, pointHoverRadius: 7, fill: false, tension: 0.3, yAxisID: 'yResult', order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1', padding: 16, font: { size: 12 } } },
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor },
+             title: { display: true, text: 'Ingresos / Egresos', color: tickColor } },
+        yResult: { position: 'right', ticks: { color: '#4ade80', callback: v => fmt(v) },
+                   grid: { drawOnChartArea: false }, title: { display: true, text: 'Resultado', color: '#4ade80' } }
+      }
+    }
+  });
+
+  // ── Chart 2: Resultado mensual ────────────────────────────────
+  _charts.result = new Chart(document.getElementById('chartResultado'), {
+    type: 'bar',
+    data: {
+      labels: D.meses,
+      datasets: [{
+        label: 'Resultado Económico', data: D.resultado,
+        backgroundColor: D.resultado.map(v => v >= 0 ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.75)'),
+        borderColor:     D.resultado.map(v => v >= 0 ? '#22c55e' : '#ef4444'),
+        borderWidth: 1.5, borderRadius: 5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)}` } } },
+      scales: {
+        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+      }
+    }
+  });
+
+  // ── Chart 3: Donut composición egresos ───────────────────────
+  const sum = arr => arr.reduce((a, b) => a + b, 0);
+  const promedios = [
+    sum(D.costoVentas), sum(D.sueldos), sum(D.servicios), sum(D.bancarios),
+    sum(D.gastosEmpresa), sum(D.posnet), sum(D.mercadopago), sum(D.impuestos)
+  ];
+  _charts.donut = new Chart(document.getElementById('chartDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Costo Ventas', 'Sueldos', 'Servicios', 'G. Bancarios', 'Gastos Empresa', 'G. Posnet', 'G. Mercado Pago', 'Impuestos'],
+      datasets: [{
+        data: promedios,
+        backgroundColor: ['#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#10b981','#f97316','#ec4899'],
+        borderColor: '#1e293b', borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#cbd5e1', padding: 10, font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => {
+          const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+          const pct   = (ctx.raw / total * 100).toFixed(1);
+          return ` ${ctx.label}: ${fmt(ctx.raw)} (${pct}%)`;
+        }}}
+      }
+    }
+  });
+
+  // ── Chart 4: Compras de mercadería ───────────────────────────
+  const totalCompras = sum(D.compras);
+  _charts.compras = new Chart(document.getElementById('chartCompras'), {
+    type: 'bar',
+    data: {
+      labels: D.meses,
+      datasets: [
+        { label: 'Compra de Mercadería', data: D.compras, backgroundColor: 'rgba(251,191,36,0.75)',
+          borderColor: '#f59e0b', borderWidth: 1.5, borderRadius: 5, order: 2 },
+        { label: 'Costo de Reposición', data: D.costoVentas, type: 'line', borderColor: '#ef4444',
+          backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 2.5, pointBackgroundColor: '#ef4444',
+          pointRadius: 5, fill: false, tension: 0.3, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1', padding: 16, font: { size: 12 } } },
+        tooltip: {
+          mode: 'index', intersect: false,
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}`,
+            afterBody: items => {
+              const c = items.find(i => i.datasetIndex === 0);
+              const s = items.find(i => i.datasetIndex === 1);
+              if (c && s) return [``, ` Diferencia (compra − costo): ${fmt(c.raw - s.raw)}`];
+            }
+          }
+        },
+        subtitle: {
+          display: true,
+          text: `Total acumulado compras: ${fmt(totalCompras)}  |  Promedio mensual: ${fmt(totalCompras / D.meses.length)}`,
+          color: '#94a3b8', font: { size: 11 }, padding: { bottom: 10 }
+        }
+      },
+      scales: {
+        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+      }
+    }
+  });
+
+  // ── Chart 5: Egresos apilados por rubro ─────────────────────
+  _charts.egresosRubro = new Chart(document.getElementById('chartEgresosRubro'), {
+    type: 'bar',
+    data: {
+      labels: D.meses,
+      datasets: [
+        { label: 'Costo Ventas',    data: D.costoVentas,   backgroundColor: '#3b82f6', stack: 'stack' },
+        { label: 'Sueldos',         data: D.sueldos,        backgroundColor: '#f59e0b', stack: 'stack' },
+        { label: 'Servicios',       data: D.servicios,      backgroundColor: '#8b5cf6', stack: 'stack' },
+        { label: 'G. Bancarios',    data: D.bancarios,      backgroundColor: '#ef4444', stack: 'stack' },
+        { label: 'Gastos Empresa',  data: D.gastosEmpresa,  backgroundColor: '#06b6d4', stack: 'stack' },
+        { label: 'G. Posnet',       data: D.posnet,         backgroundColor: '#10b981', stack: 'stack' },
+        { label: 'G. Mercado Pago', data: D.mercadopago,    backgroundColor: '#f97316', stack: 'stack' },
+        { label: 'Impuestos',       data: D.impuestos,      backgroundColor: '#ec4899', stack: 'stack' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#cbd5e1', padding: 12, font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { stacked: true, ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: cabecera de período
+// ═══════════════════════════════════════════════════════════════
+function renderHeader() {
+  const first = D.meses[0], last = D.meses[D.meses.length - 1];
+  document.getElementById('headerPeriod').textContent =
+    `Período: ${first} – ${last} · ${D.meses.length} meses de operación`;
+  document.getElementById('footerText').textContent =
+    `Dashboard generado en vivo — Supermercado Don Américo | Datos: ${first} – ${last} | CIAF`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════════
+function renderAll() {
+  renderKPIs();
+  renderCharts();
+  renderTableResumen();
+  renderTableRubros();
+  renderHeader();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BOOTSTRAP
+// ═══════════════════════════════════════════════════════════════
+async function bootstrap() {
+  loadConfig();
+  const configured = CONFIG.apiKey   && !CONFIG.apiKey.includes('%%') &&
+                     CONFIG.folderId && !CONFIG.folderId.includes('%%');
+  if (!configured) {
+    showStatus('Configurá Google Drive para empezar', 'info');
+    openConfigModal();
+    return;
+  }
+  try {
+    const ok = await loadAllMonths();
+    if (ok) renderAll();
+  } catch(err) {
+    showStatus('Error: ' + err.message, 'error');
+    console.error('[Don Américo] Error al cargar:', err);
+    openConfigModal();
+  }
+}
+
+async function recargar() {
+  try {
+    const ok = await loadAllMonths();
+    if (ok) renderAll();
+  } catch(err) {
+    showStatus('Error: ' + err.message, 'error');
+    console.error('[Don Américo] Error al recargar:', err);
+  }
+}
+
+window.addEventListener('load', bootstrap);
+</script>
+</body>
+</html>
