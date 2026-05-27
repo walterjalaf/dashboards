@@ -398,6 +398,34 @@ let CONFIG = {
   folderId: '1f3ttYW0S_U1YIiVufXQol3Pq7rfeQQxI'
 };
 
+// ═══════════════════════════════════════════════════════════════
+// CACHÉ en localStorage (invalidada por modifiedTime)
+// ═══════════════════════════════════════════════════════════════
+const CACHE_KEY = 'donamerico_cache_v1';
+function cacheGet() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) { return {}; }
+}
+function cacheSet(map) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(map)); } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FETCH CON BACKOFF EXPONENCIAL (429 / 503)
+// ═══════════════════════════════════════════════════════════════
+async function fetchWithRetry(url, { retries = 4, baseDelay = 800 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url);
+    if (res.status !== 429 && res.status !== 503) return res;
+    if (attempt >= retries) return res;
+    const ra   = parseInt(res.headers.get('Retry-After'), 10);
+    const wait = Number.isFinite(ra)
+      ? ra * 1000
+      : baseDelay * 2 ** attempt + Math.random() * 300;
+    console.warn(`[Don Américo] Rate-limited (${res.status}), reintentando en ${Math.round(wait)}ms (intento ${attempt + 1}/${retries})`);
+    await new Promise(r => setTimeout(r, wait));
+  }
+}
+
 // Dataset completo (todos los meses cargados)
 let D = {};
 
@@ -485,7 +513,7 @@ async function listXlsxInFolder(folderId, depth) {
   const q    = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const flds = encodeURIComponent('files(id,name,mimeType,modifiedTime)');
   const url  = `${DRIVE_API}?q=${q}&key=${encodeURIComponent(CONFIG.apiKey)}&fields=${flds}&pageSize=200&orderBy=name`;
-  const res  = await fetch(url);
+  const res  = await fetchWithRetry(url);
   if (!res.ok) {
     if (depth > 0) return []; // subcarpeta inaccesible → saltar en silencio
     const body = await res.json().catch(() => ({}));
@@ -514,7 +542,7 @@ async function fetchGSheetAsWorkbook(fileId) {
 
   // 1. Obtener nombres de hojas
   const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?key=${key}&fields=sheets.properties.title`;
-  const metaRes = await fetch(metaUrl);
+  const metaRes = await fetchWithRetry(metaUrl);
   if (!metaRes.ok) {
     const body = await metaRes.json().catch(() => ({}));
     const msg  = (body.error && body.error.message) || metaRes.statusText;
@@ -524,30 +552,35 @@ async function fetchGSheetAsWorkbook(fileId) {
   const sheetNames = (meta.sheets || []).map(s => s.properties.title);
   if (!sheetNames.length) throw new Error('Sin hojas en el documento');
 
-  // 2. Leer valores de cada hoja con UNFORMATTED_VALUE (números como números, no strings formateados)
-  const wb = { SheetNames: [], Sheets: {} };
-  for (const name of sheetNames) {
-    const range = encodeURIComponent(name);
-    const url   = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values/${range}?key=${key}&valueRenderOption=UNFORMATTED_VALUE`;
-    const res   = await fetch(url);
+  // 2. Leer TODAS las hojas en 1 request (batchGet) — reduce de 1+N a 2 requests por libro
+  const wb    = { SheetNames: [], Sheets: {} };
+  const CHUNK = 25; // seguridad para URLs muy largas (en la práctica 1 chunk por libro)
+  for (let i = 0; i < sheetNames.length; i += CHUNK) {
+    const slice  = sheetNames.slice(i, i + CHUNK);
+    const ranges = slice
+      .map(n => `ranges=${encodeURIComponent("'" + n.replace(/'/g, "''") + "'")}`)
+      .join('&');
+    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values:batchGet`
+                   + `?${ranges}&valueRenderOption=UNFORMATTED_VALUE&key=${key}`;
+    const res = await fetchWithRetry(batchUrl);
     if (!res.ok) continue;
-    const data  = await res.json();
-    const rows  = data.values || [];
-    if (!rows.length) continue;
-
-    // Construir worksheet compatible con SheetJS
-    const ws  = {};
-    let maxC  = 0;
-    rows.forEach((row, r) => {
-      if (row.length > maxC) maxC = row.length;
-      row.forEach((v, c) => {
-        const addr  = XLSX.utils.encode_cell({ r, c });
-        ws[addr] = { v, t: typeof v === 'number' ? 'n' : 's' };
+    const data = await res.json();
+    (data.valueRanges || []).forEach((vr, idx) => {
+      const name = slice[idx];
+      const rows = vr.values || [];
+      if (!rows.length) return;
+      // Construir worksheet compatible con SheetJS (mismo formato que antes)
+      const ws = {}; let maxC = 0;
+      rows.forEach((row, r) => {
+        if (row.length > maxC) maxC = row.length;
+        row.forEach((v, c) => {
+          ws[XLSX.utils.encode_cell({ r, c })] = { v, t: typeof v === 'number' ? 'n' : 's' };
+        });
       });
+      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: Math.max(0, maxC - 1) } });
+      wb.SheetNames.push(name);
+      wb.Sheets[name] = ws;
     });
-    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: Math.max(0, maxC - 1) } });
-    wb.SheetNames.push(name);
-    wb.Sheets[name] = ws;
   }
   return wb;
 }
@@ -558,7 +591,7 @@ async function fetchGSheetAsWorkbook(fileId) {
 async function fetchXlsxWorkbook(file) {
   if (file.mimeType === GSHEET_MIME) return fetchGSheetAsWorkbook(file.id);
   const url = `${DRIVE_API}/${file.id}?alt=media&key=${encodeURIComponent(CONFIG.apiKey)}`;
-  const res = await fetch(url);
+  const res = await fetchWithRetry(url);
   if (!res.ok) throw new Error(`Descarga ${res.status} — ${file.name}`);
   const buf = await res.arrayBuffer();
   return XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
@@ -917,17 +950,28 @@ async function loadAllMonths() {
   if (!annotated.length) { showStatus('Sin archivos con mes+año detectables en el nombre.', 'error'); return false; }
 
   const results = [];
+  const cache   = cacheGet();
+  const updated = { ...cache };
   for (let i = 0; i < annotated.length; i++) {
-    const f = annotated[i];
+    const f   = annotated[i];
+    const hit = cache[f.id];
+    // Usar caché si el archivo no cambió desde la última carga
+    if (hit && hit.modifiedTime === f.modifiedTime && hit.parsed) {
+      console.log(`[DonAmerico] Caché: ${f.info.label}`);
+      results.push({ label: f.info.label, year: f.info.year, month: f.info.month, ...hit.parsed });
+      continue;
+    }
     showStatus(`Cargando ${f.info.label} (${i + 1}/${annotated.length})…`, 'info');
     try {
       const wb     = await fetchXlsxWorkbook(f);
       const parsed = parseMonthlySummary(wb);
       results.push({ label: f.info.label, year: f.info.year, month: f.info.month, ...parsed });
+      updated[f.id] = { modifiedTime: f.modifiedTime, parsed };
     } catch(err) {
       console.warn(`[DonAmerico] Omitiendo ${f.info.label}:`, err.message);
     }
   }
+  cacheSet(updated);
 
   if (!results.length) { showStatus('No se pudo leer ningún archivo. Verificá que los Google Sheets estén compartidos como "Cualquier persona con el enlace".', 'error'); return false; }
 
