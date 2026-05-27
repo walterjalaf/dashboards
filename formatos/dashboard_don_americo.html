@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DON AMÉRICO · Dashboard Económico 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+:root{
+  --paper:#F5F6F8;
+  --card:#ffffff;
+  --ink:#0E1F33;
+  --ink-2:#475569;
+  --ink-3:#94a3b8;
+  --line:#e6ebf2;
+  --line-2:#eef2f8;
+  --brand:#1E4A82;
+  --brand-2:#2D6CB8;
+  --accent:#F26522;
+  --green:#0f9d6f;
+  --green-soft:#dcfce7;
+  --amber:#d97706;
+  --red:#dc2626;
+  --red-soft:#fee2e2;
+  --radius:14px;
+  --radius-sm:10px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+  --shadow-2: 0 4px 16px rgba(15,23,42,.06);
+  --pad:24px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Open Sans', system-ui, sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric: tabular-nums;
+}
+.num{font-variant-numeric: tabular-nums; font-family:'JetBrains Mono', monospace}
+
+/* Brandbar */
+.brandbar{
+  background:var(--ink);
+  color:#fff;
+  padding:14px 32px;
+  border-bottom:3px solid var(--accent);
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+}
+.brand-mark{
+  font-family:'Montserrat', sans-serif;
+  font-weight:900;
+  font-size:18px;
+  letter-spacing:.08em;
+  display:flex;align-items:center;gap:14px;
+}
+.brand-mark::before{
+  content:"";display:inline-block;width:34px;height:34px;
+  background:var(--accent);border-radius:6px;
+  box-shadow:0 0 0 3px rgba(242,101,34,.25);
+}
+.brand-meta{
+  font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;
+  color:#cbd5e1;
+}
+
+/* Page */
+.page{max-width:1280px;margin:0 auto;padding:28px 32px 64px}
+
+.header{
+  display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:24px;
+  padding-bottom:20px;border-bottom:1px solid var(--line);
+}
+.header h1{
+  font-family:'Montserrat', sans-serif;font-weight:800;font-size:26px;letter-spacing:-.01em;
+}
+.header .eyebrow{
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin-bottom:6px;
+}
+.header .subtitle{color:var(--ink-2);font-size:13.5px;margin-top:4px}
+.header .right{text-align:right;font-size:11.5px;color:var(--ink-2)}
+.header .right strong{color:var(--ink);font-weight:600}
+
+/* Filtros */
+.filters{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 22px;margin-bottom:24px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:32px;flex-wrap:wrap;
+}
+.filter-group{display:flex;align-items:center;gap:10px}
+.filter-group label{
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-2);font-weight:700;
+}
+.filter-group select{
+  font-family:inherit;font-size:13px;padding:7px 30px 7px 12px;
+  border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
+  cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3l4 4 4-4' stroke='%231E4A82' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+}
+.filter-group select:focus{outline:2px solid var(--brand-2);outline-offset:1px}
+.filter-status{
+  margin-left:auto;font-size:11.5px;color:var(--ink-3);font-weight:500;
+}
+.filter-status .dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);
+  margin-right:6px;vertical-align:middle;
+  box-shadow:0 0 0 2px rgba(15,157,111,.2);
+}
+
+/* KPI Grid */
+.kpi-grid{
+  display:grid;grid-template-columns:repeat(4, 1fr);gap:16px;margin-bottom:24px;
+}
+.kpi{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;
+}
+.kpi::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--brand);
+}
+.kpi.kpi-egresos::before{background:var(--accent)}
+.kpi.kpi-resultado::before{background:var(--green)}
+.kpi.kpi-resultado.neg::before{background:var(--red)}
+.kpi.kpi-mejor::before{background:#8b5cf6}
+.kpi .label{
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-2);font-weight:700;
+}
+.kpi .value{
+  font-family:'JetBrains Mono', monospace;
+  font-size:24px;font-weight:600;letter-spacing:-.01em;color:var(--ink);
+}
+.kpi .sub{
+  font-size:11.5px;color:var(--ink-2);display:flex;gap:6px;align-items:center;
+}
+.kpi .sub strong{color:var(--ink);font-weight:600;font-family:'JetBrains Mono', monospace}
+.kpi.kpi-resultado .value{color:var(--green)}
+.kpi.kpi-resultado.neg .value{color:var(--red)}
+.kpi-mejor .value{font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;letter-spacing:.04em}
+
+/* Chart cards */
+.chart-grid{display:grid;gap:16px;margin-bottom:24px}
+.chart-grid.cols-2{grid-template-columns:1fr 1fr}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow);
+}
+.card h3{
+  font-family:'Montserrat', sans-serif;font-size:15px;font-weight:700;
+  margin-bottom:16px;color:var(--ink);letter-spacing:-.005em;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card h3 .badge{
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;background:var(--line-2);
+  padding:3px 8px;border-radius:6px;font-family:'Open Sans',sans-serif;
+}
+.chart-wrap{position:relative;height:320px}
+.chart-wrap.tall{height:380px}
+
+/* Tables */
+.table-wrap{overflow-x:auto;margin:0 -6px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+table th{
+  text-align:right;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  font-weight:700;color:var(--ink-2);padding:10px 12px;border-bottom:2px solid var(--line);
+  background:var(--line-2);
+  white-space:nowrap;
+}
+table th:first-child, table td:first-child{text-align:left}
+table td{
+  padding:10px 12px;border-bottom:1px solid var(--line-2);
+  font-family:'JetBrains Mono', monospace;font-size:12px;
+  text-align:right;color:var(--ink);
+}
+table td:first-child{
+  font-family:'Open Sans', sans-serif;font-weight:600;color:var(--ink);
+  font-size:12.5px;
+}
+table tr:hover td{background:#fafbfc}
+table tr.total td{
+  font-weight:700;border-top:2px solid var(--ink);border-bottom:none;
+  background:var(--line-2);
+}
+table tr.total td:first-child{color:var(--ink)}
+.pos{color:var(--green);font-weight:600}
+.neg{color:var(--red);font-weight:600}
+
+/* Loader */
+.loader{
+  position:fixed;inset:0;background:rgba(245,246,248,.92);display:flex;
+  align-items:center;justify-content:center;z-index:50;
+  font-family:'Montserrat',sans-serif;font-weight:600;letter-spacing:.04em;
+  color:var(--ink-2);font-size:13px;
+}
+.loader.hidden{display:none}
+.spinner{
+  width:24px;height:24px;border:3px solid var(--line);border-top-color:var(--brand);
+  border-radius:50%;animation:spin .8s linear infinite;margin-right:12px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Error banner */
+.banner{
+  background:#fffbeb;border:1px solid #fde68a;color:#92400e;
+  padding:12px 18px;border-radius:10px;margin-bottom:20px;
+  font-size:13px;display:none;
+}
+.banner.visible{display:block}
+.banner code{background:#fef3c7;padding:2px 6px;border-radius:4px;font-size:12px}
+
+/* Footer */
+.footer{
+  margin-top:32px;padding-top:20px;border-top:1px solid var(--line);
+  font-size:11px;color:var(--ink-3);text-align:center;letter-spacing:.04em;
+}
+
+@media (max-width: 900px){
+  .kpi-grid{grid-template-columns:repeat(2, 1fr)}
+  .chart-grid.cols-2{grid-template-columns:1fr}
+  .page{padding:20px 16px}
+  .brandbar{padding:12px 16px}
+}
+</style>
+</head>
+<body>
+
+<div class="loader" id="loader"><div class="spinner"></div>Cargando datos…</div>
+
+<header class="brandbar">
+  <div class="brand-mark">CIAF · CONSULTORA INTEGRAL</div>
+  <div class="brand-meta">Dashboard Económico · Don Américo</div>
+</header>
+
+<main class="page">
+
+  <div class="header">
+    <div>
+      <div class="eyebrow">Resumen Mensual · 2026</div>
+      <h1>Don Américo — Tablero Económico</h1>
+      <div class="subtitle">P&amp;L mensual consolidado · 4 períodos cargados · Fuente: Google Sheet <code style="font-size:11px;background:var(--line-2);padding:1px 6px;border-radius:4px">Resumen_Mensual_DonAmerico_2026</code></div>
+    </div>
+    <div class="right">
+      <div>Actualizado <strong id="updated-at">—</strong></div>
+      <div style="margin-top:2px">Fuente: <strong id="data-source">—</strong></div>
+    </div>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <!-- Filtros -->
+  <div class="filters">
+    <div class="filter-group">
+      <label for="f-mes">Mes</label>
+      <select id="f-mes"><option value="all">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="f-año">Año</label>
+      <select id="f-año"><option value="all">Todos</option></select>
+    </div>
+    <div class="filter-status">
+      <span class="dot"></span><span id="filter-summary">—</span>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi kpi-ventas">
+      <div class="label">Ventas Totales</div>
+      <div class="value num" id="kpi-ventas-total">—</div>
+      <div class="sub">Promedio mensual: <strong id="kpi-ventas-avg">—</strong></div>
+    </div>
+    <div class="kpi kpi-egresos">
+      <div class="label">Egresos Totales</div>
+      <div class="value num" id="kpi-egresos-total">—</div>
+      <div class="sub">Promedio mensual: <strong id="kpi-egresos-avg">—</strong></div>
+    </div>
+    <div class="kpi kpi-resultado" id="kpi-resultado-card">
+      <div class="label">Resultado Acumulado</div>
+      <div class="value num" id="kpi-resultado-total">—</div>
+      <div class="sub">Margen promedio: <strong id="kpi-margen-avg">—</strong></div>
+    </div>
+    <div class="kpi kpi-mejor">
+      <div class="label">Mejor Mes</div>
+      <div class="value" id="kpi-mejor-mes">—</div>
+      <div class="sub">Resultado: <strong id="kpi-mejor-res">—</strong> · Ventas: <strong id="kpi-mejor-vts">—</strong></div>
+    </div>
+  </div>
+
+  <!-- Charts row 1 -->
+  <div class="chart-grid cols-2">
+    <div class="card">
+      <h3>Evolución Mensual <span class="badge">Ventas · Egresos · Resultado</span></h3>
+      <div class="chart-wrap"><canvas id="chart-evolucion"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Resultado Económico por Mes <span class="badge">Verde / Rojo</span></h3>
+      <div class="chart-wrap"><canvas id="chart-resultado"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts row 2 -->
+  <div class="chart-grid cols-2">
+    <div class="card">
+      <h3>Composición de Egresos por Rubro <span class="badge">% sobre total egresos</span></h3>
+      <div class="chart-wrap"><canvas id="chart-donut"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Compras vs Costo de Reposición <span class="badge">Mensual</span></h3>
+      <div class="chart-wrap"><canvas id="chart-compras"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Chart row 3 (full width) -->
+  <div class="chart-grid">
+    <div class="card">
+      <h3>Egresos por Rubro — Detalle Mensual <span class="badge">Barras apiladas</span></h3>
+      <div class="chart-wrap tall"><canvas id="chart-stacked"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tablas -->
+  <div class="card" style="margin-bottom:16px">
+    <h3>Resumen Mensual Completo</h3>
+    <div class="table-wrap">
+      <table id="tabla-resumen">
+        <thead><tr id="tabla-resumen-head"></tr></thead>
+        <tbody id="tabla-resumen-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Ventas por Rubro <span class="badge">Total período + % promedio sobre ventas</span></h3>
+    <div class="table-wrap">
+      <table id="tabla-rubros">
+        <thead><tr id="tabla-rubros-head"></tr></thead>
+        <tbody id="tabla-rubros-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">
+    Dashboard generado por CIAF Consultora Integral · Datos servidos desde Google Sheet · Última actualización al cargar la página
+  </div>
+</main>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+
+/* PARA CONECTAR CON GOOGLE SHEET:
+   1) Abrir la Google Sheet "Resumen_Mensual_DonAmerico_2026" (pestaña "datos").
+   2) File → Share → Publish to the web → CSV → marcar "Auto-republish" → copiar URL.
+   3) Pegar esa URL acá. Mientras tanto, el dashboard usa los datos embebidos (4 meses).
+*/
+const SHEET_CSV_URL = ""; // <-- pegar acá la URL pública del CSV de Google Sheet
+
+// Datos embebidos como fallback / modo demo (los 4 meses ya extraídos del Excel)
+const EMBEDDED_DATA = [{"mes_nombre": "ENERO", "mes_num": 1.0, "año": 2026.0, "ventas": 118029253.9, "costo_ventas": 84306609.91, "gastos_empresa": 4114251.96, "impuestos": 0.0, "servicios": 6464645.81, "sueldos": 10652559.29, "gastos_bancarios": 8181410.25, "gastos_mercado_pago": 762787.29, "gastos_posnet": 1976586.41, "extraordinarios": 0.0, "compras": 91670100.65, "stock_cierre": 50966649.61, "saldo_proveedores": 70749748.95, "saldo_clientes": 0.0, "resultado_economico": 1570402.958, "total_egresos": 116458850.92, "margen_neto": 1.3305201093031733, "rubro_carnes": 33793790.25999998, "rubro_fiambres": 16668538.320000011, "rubro_comestibles": 14716623.479999991, "rubro_bebidas": 11103874.159999996, "rubro_verduras": 11264490.459999986, "rubro_panificacion": 5944487.949999996, "rubro_pollo": 5373260.74, "rubro_lacteos": 4347987.059999999, "rubro_limpieza": 4026506.9000000004, "rubro_kiosco": 2143332.4699999997, "rubro_otros": 8646362.420000002, "rubro_otros_cerdo": 2282692.6500000004, "rubro_otros_congelados": 961661.87, "rubro_otros_descartables": 0.0, "rubro_otros_frescos": 1384939.11, "rubro_otros_perfumeria": 1579291.28, "rubro_otros_rotiseria": 2055869.2800000003, "rubro_otros_varios": 381908.23}, {"mes_nombre": "FEBRERO", "mes_num": 2.0, "año": 2026.0, "ventas": 110962659.7, "costo_ventas": 79259042.67, "gastos_empresa": 3979518.98, "impuestos": 1854481.35, "servicios": 6454403.135, "sueldos": 9643608.695, "gastos_bancarios": 4371377.56, "gastos_mercado_pago": 2121427.62, "gastos_posnet": 1882634.88, "extraordinarios": 0.0, "compras": 82475321.12, "stock_cierre": 55297369.9, "saldo_proveedores": 63271257.94, "saldo_clientes": 3185413.62, "resultado_economico": 1396164.848, "total_egresos": 109566494.89, "margen_neto": 1.2582294366183078, "rubro_carnes": 33420044.049999997, "rubro_fiambres": 15088838.199999996, "rubro_comestibles": 12754148.119999988, "rubro_bebidas": 10656961.670000002, "rubro_verduras": 9878199.71, "rubro_panificacion": 5801778.62, "rubro_pollo": 5200638.52, "rubro_lacteos": 4432839.6899999995, "rubro_limpieza": 3364071.1799999992, "rubro_kiosco": 2300935.2900000005, "rubro_otros": 8063725.6, "rubro_otros_cerdo": 2427888.89, "rubro_otros_congelados": 962295.4, "rubro_otros_descartables": 0.0, "rubro_otros_frescos": 1166535.7000000002, "rubro_otros_perfumeria": 1293351.44, "rubro_otros_rotiseria": 1820915.9, "rubro_otros_varios": 392738.27}, {"mes_nombre": "MARZO", "mes_num": 3.0, "año": 2026.0, "ventas": 121227140.0, "costo_ventas": 86590814.29, "gastos_empresa": 5241571.46, "impuestos": 0.0, "servicios": 6707017.64, "sueldos": 10550821.18, "gastos_bancarios": 5023566.71, "gastos_mercado_pago": 2268969.06, "gastos_posnet": 1713457.49, "extraordinarios": 0.0, "compras": 95738691.33, "stock_cierre": 52165078.29, "saldo_proveedores": 0.0, "saldo_clientes": 0.0, "resultado_economico": 3130922.171, "total_egresos": 118096217.83000001, "margen_neto": 2.5826907827735606, "rubro_carnes": 35909483.13, "rubro_fiambres": 16196804.74, "rubro_comestibles": 13600693.0, "rubro_bebidas": 10693669.66, "rubro_verduras": 12400154.88, "rubro_panificacion": 6429397.79, "rubro_pollo": 5069261.16, "rubro_lacteos": 4944339.25, "rubro_limpieza": 3848175.82, "rubro_kiosco": 3350390.53, "rubro_otros": 8756780.33, "rubro_otros_cerdo": 2205415.07, "rubro_otros_congelados": 845335.88, "rubro_otros_descartables": 83962.81, "rubro_otros_frescos": 1281679.63, "rubro_otros_perfumeria": 1591921.58, "rubro_otros_rotiseria": 2430722.39, "rubro_otros_varios": 317742.97}, {"mes_nombre": "ABRIL", "mes_num": 4.0, "año": 2026.0, "ventas": 115576626.8, "costo_ventas": 82554733.39, "gastos_empresa": 4712205.61, "impuestos": 0.0, "servicios": 6879174.68, "sueldos": 11258480.42, "gastos_bancarios": 2090576.27, "gastos_mercado_pago": 2688190.74, "gastos_posnet": 3440643.86, "extraordinarios": 0.0, "compras": 92056678.67, "stock_cierre": 0.0, "saldo_proveedores": 55581581.31, "saldo_clientes": 0.0, "resultado_economico": 1952621.778, "total_egresos": 113624004.97, "margen_neto": 1.6894607777218844, "rubro_carnes": 35042570.63, "rubro_fiambres": 15881467.52, "rubro_comestibles": 13840750.23, "rubro_bebidas": 9190684.62, "rubro_verduras": 10475086.01, "rubro_panificacion": 6278540.39, "rubro_pollo": 4529577.77, "rubro_lacteos": 4747175.01, "rubro_limpieza": 3436705.88, "rubro_kiosco": 4478967.8, "rubro_otros": 7635588.140000001, "rubro_otros_cerdo": 2667046.43, "rubro_otros_congelados": 903767.94, "rubro_otros_descartables": 90521.0, "rubro_otros_frescos": 1168335.14, "rubro_otros_perfumeria": 1385198.6, "rubro_otros_rotiseria": 1044835.01, "rubro_otros_varios": 375884.02}];
+
+const NOMBRE_MES = ['','ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+
+// Paleta para rubros (donut y stacked)
+const PALETA_RUBROS = {
+  'costo_ventas':       '#1E4A82',  // brand
+  'sueldos':            '#2D6CB8',  // brand-2
+  'servicios':          '#0f9d6f',  // green
+  'gastos_bancarios':   '#8b5cf6',  // violet
+  'gastos_empresa':     '#F26522',  // accent
+  'gastos_posnet':      '#06b6d4',  // cyan
+  'gastos_mercado_pago':'#d97706',  // amber
+  'impuestos':          '#dc2626',  // red
+};
+const LABELS_EGRESOS = {
+  'costo_ventas':'Costo Ventas',
+  'sueldos':'Sueldos',
+  'servicios':'Servicios',
+  'gastos_bancarios':'Gastos Bancarios',
+  'gastos_empresa':'Gastos Empresa',
+  'gastos_posnet':'Gastos Posnet',
+  'gastos_mercado_pago':'Gastos Mercado Pago',
+  'impuestos':'Impuestos',
+};
+const ORDEN_EGRESOS = ['costo_ventas','sueldos','servicios','gastos_bancarios','gastos_empresa','gastos_posnet','gastos_mercado_pago','impuestos'];
+
+const RUBROS_LIST = [
+  ['rubro_carnes','Carnes'],
+  ['rubro_fiambres','Fiambres'],
+  ['rubro_comestibles','Comestibles'],
+  ['rubro_bebidas','Bebidas'],
+  ['rubro_verduras','Verduras'],
+  ['rubro_panificacion','Panificación'],
+  ['rubro_pollo','Pollo'],
+  ['rubro_lacteos','Lácteos'],
+  ['rubro_limpieza','Limpieza'],
+  ['rubro_kiosco','Kiosco'],
+  ['rubro_otros','Otros'],
+];
+
+// ============================================================
+// FORMATEO
+// ============================================================
+const fmt = new Intl.NumberFormat('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtPct = new Intl.NumberFormat('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+function $(id){return document.getElementById(id)}
+function num(v){return (v==null||isNaN(v))?0:Number(v)}
+function fmtArs(v){
+  v = num(v);
+  return '$ ' + fmt.format(v);
+}
+function fmtPctVal(v){
+  v = num(v);
+  return fmtPct.format(v) + ' %';
+}
+
+// ============================================================
+// CARGA DE DATOS
+// ============================================================
+async function loadData(){
+  // Intentar Google Sheet primero
+  if(SHEET_CSV_URL && SHEET_CSV_URL.length > 10){
+    try{
+      const res = await fetch(SHEET_CSV_URL);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const parsed = Papa.parse(text, {header:true, skipEmptyLines:true, dynamicTyping:true});
+      if(parsed.errors.length) throw new Error('Parse error: ' + parsed.errors[0].message);
+      $('data-source').textContent = 'Google Sheet (live)';
+      return parsed.data;
+    }catch(e){
+      console.warn('Fallback a datos embebidos:', e);
+      const b = $('banner');
+      b.innerHTML = '⚠️ No se pudo cargar Google Sheet (<code>' + (e.message||e) + '</code>). Mostrando datos embebidos.';
+      b.classList.add('visible');
+    }
+  }
+  $('data-source').textContent = 'Datos embebidos (demo)';
+  return EMBEDDED_DATA;
+}
+
+// ============================================================
+// CÁLCULOS
+// ============================================================
+function aggregate(rows){
+  const out = {
+    ventas:0, total_egresos:0, resultado:0,
+    costo_ventas:0, sueldos:0, servicios:0, gastos_bancarios:0,
+    gastos_empresa:0, gastos_posnet:0, gastos_mercado_pago:0, impuestos:0,
+    compras:0,
+    rubros:{},
+    count: rows.length,
+    rows: rows,
+  };
+  RUBROS_LIST.forEach(([k,_]) => out.rubros[k] = 0);
+
+  rows.forEach(r => {
+    out.ventas += num(r.ventas);
+    out.total_egresos += num(r.total_egresos);
+    out.resultado += num(r.resultado_economico);
+    out.costo_ventas += num(r.costo_ventas);
+    out.sueldos += num(r.sueldos);
+    out.servicios += num(r.servicios);
+    out.gastos_bancarios += num(r.gastos_bancarios);
+    out.gastos_empresa += num(r.gastos_empresa);
+    out.gastos_posnet += num(r.gastos_posnet);
+    out.gastos_mercado_pago += num(r.gastos_mercado_pago);
+    out.impuestos += num(r.impuestos);
+    out.compras += num(r.compras);
+    RUBROS_LIST.forEach(([k,_]) => out.rubros[k] += num(r[k]));
+  });
+
+  out.margen = out.ventas ? (out.resultado / out.ventas * 100) : 0;
+  out.ventas_avg = out.count ? out.ventas / out.count : 0;
+  out.egresos_avg = out.count ? out.total_egresos / out.count : 0;
+  return out;
+}
+
+function findBestMonth(rows){
+  if(!rows.length) return null;
+  return rows.reduce((best, r) => num(r.resultado_economico) > num(best.resultado_economico) ? r : best);
+}
+
+// ============================================================
+// RENDER: KPIs
+// ============================================================
+function renderKPIs(agg){
+  $('kpi-ventas-total').textContent = fmtArs(agg.ventas);
+  $('kpi-ventas-avg').textContent = fmtArs(agg.ventas_avg);
+  $('kpi-egresos-total').textContent = fmtArs(agg.total_egresos);
+  $('kpi-egresos-avg').textContent = fmtArs(agg.egresos_avg);
+  $('kpi-resultado-total').textContent = fmtArs(agg.resultado);
+  $('kpi-margen-avg').textContent = fmtPctVal(agg.margen);
+  const card = $('kpi-resultado-card');
+  card.classList.toggle('neg', agg.resultado < 0);
+
+  const best = findBestMonth(agg.rows);
+  if(best){
+    $('kpi-mejor-mes').textContent = (best.mes_nombre||'') + ' ' + (best.año||'');
+    $('kpi-mejor-res').textContent = fmtArs(best.resultado_economico);
+    $('kpi-mejor-vts').textContent = fmtArs(best.ventas);
+  }else{
+    $('kpi-mejor-mes').textContent = '—';
+    $('kpi-mejor-res').textContent = '—';
+    $('kpi-mejor-vts').textContent = '—';
+  }
+}
+
+// ============================================================
+// CHART HELPERS
+// ============================================================
+const charts = {};
+
+function destroyChart(id){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+}
+
+const tooltipCfg = {
+  backgroundColor:'#0E1F33',
+  titleFont:{family:'Montserrat', weight:'700', size:12},
+  bodyFont:{family:'JetBrains Mono', size:12},
+  padding:12,
+  cornerRadius:8,
+  boxPadding:6,
+  callbacks:{
+    label: (ctx) => {
+      const label = ctx.dataset.label || '';
+      const v = ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed;
+      return label + ': ' + fmtArs(v);
+    }
+  }
+};
+
+const axisTickFont = {family:'JetBrains Mono', size:10.5};
+const axisGridColor = '#eef2f8';
+
+function moneyAxis(opts){
+  return Object.assign({
+    type:'linear',
+    grid:{color:axisGridColor, drawBorder:false},
+    border:{display:false},
+    ticks:{
+      font:axisTickFont,
+      color:'#475569',
+      callback: (v) => '$ ' + fmt.format(v),
+    }
+  }, opts||{});
+}
+
+// ============================================================
+// RENDER: CHARTS
+// ============================================================
+function renderEvolucion(agg){
+  destroyChart('evolucion');
+  const labels = agg.rows.map(r => (r.mes_nombre||'').slice(0,3) + " '" + String(r.año||'').slice(-2));
+  charts.evolucion = new Chart($('chart-evolucion'), {
+    type:'bar',
+    data:{
+      labels: labels,
+      datasets:[
+        {label:'Total Ingresos', data:agg.rows.map(r=>num(r.ventas)),
+         backgroundColor:'#1E4A82', borderRadius:6, yAxisID:'y', order:2, barPercentage:0.7, categoryPercentage:0.6},
+        {label:'Total Egresos', data:agg.rows.map(r=>num(r.total_egresos)),
+         backgroundColor:'#F26522', borderRadius:6, yAxisID:'y', order:2, barPercentage:0.7, categoryPercentage:0.6},
+        {label:'Resultado Económico', data:agg.rows.map(r=>num(r.resultado_economico)),
+         type:'line', borderColor:'#0f9d6f', backgroundColor:'#0f9d6f',
+         borderWidth:2.5, pointRadius:5, pointBackgroundColor:'#fff', pointBorderWidth:2,
+         tension:0.25, yAxisID:'y1', order:1},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{position:'bottom', labels:{font:{family:'Open Sans', size:11}, padding:14, boxWidth:12, boxHeight:12, usePointStyle:true}},
+        tooltip:tooltipCfg,
+      },
+      scales:{
+        x:{grid:{display:false}, border:{display:false}, ticks:{font:axisTickFont, color:'#475569'}},
+        y: moneyAxis({position:'left'}),
+        y1: moneyAxis({position:'right', grid:{display:false}}),
+      }
+    }
+  });
+}
+
+function renderResultado(agg){
+  destroyChart('resultado');
+  const labels = agg.rows.map(r => (r.mes_nombre||'').slice(0,3) + " '" + String(r.año||'').slice(-2));
+  const data = agg.rows.map(r => num(r.resultado_economico));
+  const colors = data.map(v => v >= 0 ? '#0f9d6f' : '#dc2626');
+  charts.resultado = new Chart($('chart-resultado'), {
+    type:'bar',
+    data:{
+      labels:labels,
+      datasets:[{label:'Resultado Económico', data:data, backgroundColor:colors, borderRadius:6, barPercentage:0.6, categoryPercentage:0.7}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:tooltipCfg },
+      scales:{
+        x:{grid:{display:false}, border:{display:false}, ticks:{font:axisTickFont, color:'#475569'}},
+        y: moneyAxis(),
+      }
+    }
+  });
+}
+
+function renderDonut(agg){
+  destroyChart('donut');
+  const data = ORDEN_EGRESOS.map(k => agg[k]);
+  const labels = ORDEN_EGRESOS.map(k => LABELS_EGRESOS[k]);
+  const colors = ORDEN_EGRESOS.map(k => PALETA_RUBROS[k]);
+  const total = data.reduce((a,b)=>a+b,0);
+
+  charts.donut = new Chart($('chart-donut'), {
+    type:'doughnut',
+    data:{ labels:labels, datasets:[{data:data, backgroundColor:colors, borderColor:'#fff', borderWidth:2}] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      cutout:'62%',
+      plugins:{
+        legend:{position:'right', labels:{font:{family:'Open Sans', size:11.5}, padding:10, boxWidth:12, boxHeight:12, usePointStyle:true,
+          generateLabels: (chart) => {
+            const ds = chart.data.datasets[0];
+            return chart.data.labels.map((lab,i) => {
+              const v = ds.data[i];
+              const pct = total ? (v/total*100) : 0;
+              return {
+                text: lab + '  ' + fmtPct.format(pct) + ' %',
+                fillStyle: ds.backgroundColor[i],
+                strokeStyle: ds.backgroundColor[i],
+                lineWidth: 0,
+                hidden: false,
+                index: i,
+                pointStyle:'circle',
+              };
+            });
+          }
+        }},
+        tooltip:{
+          ...tooltipCfg,
+          callbacks:{
+            label:(ctx) => {
+              const v = ctx.parsed;
+              const pct = total ? (v/total*100) : 0;
+              return ctx.label + ': ' + fmtArs(v) + '  (' + fmtPct.format(pct) + ' %)';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderCompras(agg){
+  destroyChart('compras');
+  const labels = agg.rows.map(r => (r.mes_nombre||'').slice(0,3) + " '" + String(r.año||'').slice(-2));
+  charts.compras = new Chart($('chart-compras'), {
+    type:'bar',
+    data:{
+      labels:labels,
+      datasets:[
+        {label:'Compra de Mercadería', data:agg.rows.map(r=>num(r.compras)),
+         backgroundColor:'#1E4A82', borderRadius:6, order:2, barPercentage:0.7, categoryPercentage:0.6},
+        {label:'Costo de Ventas / Reposición', data:agg.rows.map(r=>num(r.costo_ventas)),
+         type:'line', borderColor:'#F26522', backgroundColor:'#F26522',
+         borderWidth:2.5, pointRadius:5, pointBackgroundColor:'#fff', pointBorderWidth:2,
+         tension:0.25, order:1},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{position:'bottom', labels:{font:{family:'Open Sans', size:11}, padding:14, boxWidth:12, boxHeight:12, usePointStyle:true}},
+        tooltip:tooltipCfg,
+      },
+      scales:{
+        x:{grid:{display:false}, border:{display:false}, ticks:{font:axisTickFont, color:'#475569'}},
+        y: moneyAxis(),
+      }
+    }
+  });
+}
+
+function renderStacked(agg){
+  destroyChart('stacked');
+  const labels = agg.rows.map(r => (r.mes_nombre||'').slice(0,3) + " '" + String(r.año||'').slice(-2));
+  const datasets = ORDEN_EGRESOS.map(k => ({
+    label: LABELS_EGRESOS[k],
+    data: agg.rows.map(r => num(r[k])),
+    backgroundColor: PALETA_RUBROS[k],
+    borderRadius: 4,
+    barPercentage: 0.7,
+    categoryPercentage: 0.7,
+  }));
+
+  charts.stacked = new Chart($('chart-stacked'), {
+    type:'bar',
+    data:{labels:labels, datasets:datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{position:'bottom', labels:{font:{family:'Open Sans', size:11}, padding:12, boxWidth:12, boxHeight:12, usePointStyle:true}},
+        tooltip:{
+          ...tooltipCfg,
+          callbacks:{
+            ...tooltipCfg.callbacks,
+            footer: (items) => {
+              const total = items.reduce((a,i) => a + i.parsed.y, 0);
+              return 'Total: ' + fmtArs(total);
+            }
+          }
+        },
+      },
+      scales:{
+        x:{stacked:true, grid:{display:false}, border:{display:false}, ticks:{font:axisTickFont, color:'#475569'}},
+        y:{stacked:true, ...moneyAxis()},
+      }
+    }
+  });
+}
+
+// ============================================================
+// RENDER: TABLES
+// ============================================================
+function renderTablaResumen(agg){
+  const head = $('tabla-resumen-head');
+  const body = $('tabla-resumen-body');
+  head.innerHTML = '';
+  body.innerHTML = '';
+
+  const colsMes = agg.rows.map(r => (r.mes_nombre||'') + ' ' + (r.año||''));
+  const filas = [
+    ['Total Ingresos', 'ventas', false],
+    ['Costo de Ventas', 'costo_ventas', false],
+    ['Gastos de Empresa', 'gastos_empresa', false],
+    ['Impuestos', 'impuestos', false],
+    ['Servicios', 'servicios', false],
+    ['Gastos Bancarios', 'gastos_bancarios', false],
+    ['Gastos Mercado Pago', 'gastos_mercado_pago', false],
+    ['Gastos Posnet', 'gastos_posnet', false],
+    ['Sueldos', 'sueldos', false],
+    ['Total Egresos', 'total_egresos', true],
+    ['Resultado Económico', 'resultado_economico', true],
+    ['Margen Neto (%)', '__margen__', true],
+  ];
+
+  // Head
+  let html = '<th>Concepto</th>';
+  colsMes.forEach(c => html += '<th>' + c + '</th>');
+  html += '<th>Total / Promedio</th>';
+  head.innerHTML = html;
+
+  // Body
+  filas.forEach(([label, key, isTotal]) => {
+    let row = '<tr' + (isTotal?' class="total"':'') + '>';
+    row += '<td>' + label + '</td>';
+    let acumulado = 0, ventasAcum = 0;
+    agg.rows.forEach(r => {
+      let v;
+      if(key === '__margen__'){
+        v = num(r.ventas) ? (num(r.resultado_economico)/num(r.ventas)*100) : 0;
+        row += '<td>' + fmtPctVal(v) + '</td>';
+      }else{
+        v = num(r[key]);
+        acumulado += v;
+        ventasAcum += num(r.ventas);
+        if(key === 'resultado_economico'){
+          row += '<td class="' + (v>=0?'pos':'neg') + '">' + fmtArs(v) + '</td>';
+        }else{
+          row += '<td>' + fmtArs(v) + '</td>';
+        }
+      }
+    });
+    // Total/promedio col
+    if(key === '__margen__'){
+      const m = agg.ventas ? (agg.resultado/agg.ventas*100) : 0;
+      row += '<td><strong>' + fmtPctVal(m) + '</strong></td>';
+    }else if(key === 'resultado_economico'){
+      row += '<td class="' + (agg.resultado>=0?'pos':'neg') + '"><strong>' + fmtArs(agg.resultado) + '</strong></td>';
+    }else if(key === 'total_egresos'){
+      row += '<td><strong>' + fmtArs(agg.total_egresos) + '</strong></td>';
+    }else if(key === 'ventas'){
+      row += '<td><strong>' + fmtArs(agg.ventas) + '</strong></td>';
+    }else{
+      row += '<td>' + fmtArs(acumulado) + '</td>';
+    }
+    row += '</tr>';
+    body.innerHTML += row;
+  });
+}
+
+function renderTablaRubros(agg){
+  const head = $('tabla-rubros-head');
+  const body = $('tabla-rubros-body');
+  head.innerHTML = '';
+  body.innerHTML = '';
+
+  const colsMes = agg.rows.map(r => (r.mes_nombre||'') + ' ' + (r.año||''));
+  let html = '<th>Rubro</th>';
+  colsMes.forEach(c => html += '<th>' + c + '</th>');
+  html += '<th>Total período</th><th>% promedio</th>';
+  head.innerHTML = html;
+
+  // Compute total ventas para denominador del %
+  const ventasTotal = agg.ventas;
+
+  RUBROS_LIST.forEach(([key, label]) => {
+    let row = '<tr><td>' + label + '</td>';
+    let total = 0;
+    agg.rows.forEach(r => {
+      const v = num(r[key]);
+      total += v;
+      row += '<td>' + fmtArs(v) + '</td>';
+    });
+    const pct = ventasTotal ? (total / ventasTotal * 100) : 0;
+    row += '<td><strong>' + fmtArs(total) + '</strong></td>';
+    row += '<td><strong>' + fmtPctVal(pct) + '</strong></td>';
+    row += '</tr>';
+    body.innerHTML += row;
+  });
+
+  // Fila total
+  let totalRow = '<tr class="total"><td>TOTAL VENTAS</td>';
+  let granTotalRubros = 0;
+  agg.rows.forEach(r => {
+    const sumaFila = RUBROS_LIST.reduce((a,[k,_]) => a + num(r[k]), 0);
+    granTotalRubros += sumaFila;
+    totalRow += '<td>' + fmtArs(sumaFila) + '</td>';
+  });
+  totalRow += '<td>' + fmtArs(granTotalRubros) + '</td>';
+  totalRow += '<td>100,00 %</td>';
+  totalRow += '</tr>';
+  body.innerHTML += totalRow;
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+let ALL_DATA = [];
+
+function uniqueSorted(arr, key){
+  return [...new Set(arr.map(r => r[key]))].filter(v => v != null).sort((a,b) => a-b);
+}
+
+function populateFilters(rows){
+  const mesSel = $('f-mes');
+  const añoSel = $('f-año');
+
+  // Año primero
+  uniqueSorted(rows, 'año').forEach(a => {
+    const o = document.createElement('option');
+    o.value = a; o.textContent = a;
+    añoSel.appendChild(o);
+  });
+
+  // Meses: nombres únicos en orden
+  const mesesUnicos = [];
+  const vistos = new Set();
+  rows.sort((a,b)=>(a.año-b.año)||(a.mes_num-b.mes_num)).forEach(r => {
+    if(!vistos.has(r.mes_num)){
+      vistos.add(r.mes_num);
+      mesesUnicos.push([r.mes_num, r.mes_nombre]);
+    }
+  });
+  mesesUnicos.sort((a,b)=>a[0]-b[0]).forEach(([num, nom]) => {
+    const o = document.createElement('option');
+    o.value = num; o.textContent = nom;
+    mesSel.appendChild(o);
+  });
+
+  mesSel.addEventListener('change', applyFilters);
+  añoSel.addEventListener('change', applyFilters);
+}
+
+function applyFilters(){
+  const mes = $('f-mes').value;
+  const año = $('f-año').value;
+  let filtered = ALL_DATA.slice();
+  if(mes !== 'all') filtered = filtered.filter(r => String(r.mes_num) === String(mes));
+  if(año !== 'all') filtered = filtered.filter(r => String(r.año) === String(año));
+
+  // Orden cronológico
+  filtered.sort((a,b) => (a.año-b.año) || (a.mes_num-b.mes_num));
+
+  // Status
+  const parts = [];
+  parts.push(filtered.length + ' período(s) en vista');
+  if(mes !== 'all') parts.push('mes: ' + $('f-mes').options[$('f-mes').selectedIndex].textContent);
+  if(año !== 'all') parts.push('año: ' + año);
+  $('filter-summary').textContent = parts.join(' · ');
+
+  renderAll(filtered);
+}
+
+function renderAll(rows){
+  if(!rows.length){
+    // Limpiar todo
+    ['kpi-ventas-total','kpi-ventas-avg','kpi-egresos-total','kpi-egresos-avg',
+     'kpi-resultado-total','kpi-margen-avg','kpi-mejor-mes','kpi-mejor-res','kpi-mejor-vts']
+     .forEach(id => $(id).textContent = '—');
+    ['evolucion','resultado','donut','compras','stacked'].forEach(destroyChart);
+    $('tabla-resumen-body').innerHTML = '<tr><td colspan="99" style="text-align:center;color:var(--ink-3);padding:24px">Sin datos para los filtros seleccionados</td></tr>';
+    $('tabla-rubros-body').innerHTML = '<tr><td colspan="99" style="text-align:center;color:var(--ink-3);padding:24px">Sin datos para los filtros seleccionados</td></tr>';
+    return;
+  }
+  const agg = aggregate(rows);
+  renderKPIs(agg);
+  renderEvolucion(agg);
+  renderResultado(agg);
+  renderDonut(agg);
+  renderCompras(agg);
+  renderStacked(agg);
+  renderTablaResumen(agg);
+  renderTablaRubros(agg);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+(async function init(){
+  try{
+    const data = await loadData();
+    ALL_DATA = data;
+    populateFilters(ALL_DATA);
+
+    $('updated-at').textContent = new Date().toLocaleString('es-AR', {
+      day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
+
+    applyFilters();
+  }catch(e){
+    console.error(e);
+    const b = $('banner');
+    b.innerHTML = '❌ Error al cargar los datos: <code>' + (e.message||e) + '</code>';
+    b.classList.add('visible');
+  }finally{
+    $('loader').classList.add('hidden');
+  }
+})();
+</script>
+</body>
+</html>

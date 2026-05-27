@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Económico - Supermercado Don Américo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --ink:       #0E1F33;
+  --brand:     #1E4A82;
+  --brand-2:   #2D6CB8;
+  --pearl:     #E8EAEC;
+  --paper:     #F5F6F8;
+  --soft:      #1A1A1A;
+  --accent:    #F26522;
+  --line:      rgba(255,255,255,.10);
+  --line-dark: rgba(14,31,51,.10);
+
+  --surface:   #132239;
+  --surface-2: #0a1829;
+
+  --positive:  #2ECC71;
+  --negative:  #E74C3C;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Open Sans', sans-serif;
+  background: var(--ink);
+  color: var(--pearl);
+}
+
+.header {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--brand) 100%);
+  padding: 28px 40px;
+  border-bottom: 3px solid var(--brand-2);
+}
+.header h1 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #fff;
+}
+.header p { color: rgba(232,234,236,.75); margin-top: 4px; font-size: 0.9rem; }
+
+.container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
+
+/* KPI Cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.kpi-card.blue::before   { background: var(--brand-2); }
+.kpi-card.red::before    { background: var(--negative); }
+.kpi-card.green::before  { background: var(--positive); }
+.kpi-card.yellow::before { background: var(--accent); }
+
+.kpi-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: rgba(232,234,236,.55);
+  margin-bottom: 8px;
+}
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+.kpi-value.blue   { color: var(--brand-2); }
+.kpi-value.red    { color: var(--negative); }
+.kpi-value.green  { color: var(--positive); }
+.kpi-value.yellow { color: var(--accent); }
+.kpi-sub { font-size: 0.72rem; color: rgba(232,234,236,.4); margin-top: 4px; }
+
+/* Chart layout */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+.chart-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(232,234,236,.5);
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.chart-container { position: relative; }
+
+/* Table */
+.table-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  margin-bottom: 22px;
+  overflow-x: auto;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th {
+  background: var(--surface-2);
+  padding: 10px 14px;
+  text-align: right;
+  color: rgba(232,234,236,.55);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+th:first-child { text-align: left; }
+td {
+  padding: 9px 14px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+  color: rgba(232,234,236,.75);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.77rem;
+}
+td:first-child {
+  text-align: left;
+  color: #fff;
+  font-family: 'Open Sans', sans-serif;
+  font-weight: 500;
+}
+tr:hover td { background: rgba(45,108,184,.07); }
+tr.total-row td {
+  background: rgba(30,74,130,.22);
+  font-weight: 700;
+  color: var(--brand-2);
+  border-top: 2px solid var(--brand);
+}
+tr.total-row td:first-child { color: #fff; }
+tr.result-row td { font-weight: 700; font-size: 0.9rem; }
+tr.result-row td.positive { color: var(--positive); }
+tr.result-row td.negative { color: var(--negative); }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.badge.positive { background: rgba(46,204,113,.15); color: var(--positive); }
+.badge.negative { background: rgba(231,76,60,.15);  color: var(--negative); }
+
+.section-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--brand-2);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::before {
+  content: '';
+  display: block;
+  width: 4px; height: 18px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+footer {
+  text-align: center;
+  padding: 20px;
+  color: rgba(232,234,236,.28);
+  font-size: 0.75rem;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Supermercado Don Américo — Análisis Económico</h1>
+  <p>Período: Agosto 2025 – Marzo 2026 &nbsp;|&nbsp; 8 meses de operación</p>
+</div>
+
+<div class="container">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Ventas Totales (8 meses)</div>
+      <div class="kpi-value blue">$930,1M</div>
+      <div class="kpi-sub">Promedio mensual: $116,3M</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Egresos Totales (8 meses)</div>
+      <div class="kpi-value red">$892,9M</div>
+      <div class="kpi-sub">Promedio mensual: $111,6M</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Resultado Acumulado</div>
+      <div class="kpi-value green">$37,2M</div>
+      <div class="kpi-sub">Margen promedio: 3,9%</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">Mejor Mes</div>
+      <div class="kpi-value yellow">Dic 2025</div>
+      <div class="kpi-sub">Resultado: $9,8M | Ventas: $129,3M</div>
+    </div>
+  </div>
+
+  <!-- Gráfico principal: Ventas, Egresos y Resultado -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Evolución Mensual: Ventas vs Egresos vs Resultado Económico</div>
+    <div class="chart-container" style="height:320px;">
+      <canvas id="chartEvolucion"></canvas>
+    </div>
+  </div>
+
+  <!-- Dos gráficos en fila -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Resultado Económico por Mes (ARS)</div>
+      <div class="chart-container" style="height:280px;">
+        <canvas id="chartResultado"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Composición de Egresos por Rubro (promedio %)</div>
+      <div class="chart-container" style="height:280px;">
+        <canvas id="chartDonut"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compras de mercadería -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Compra de Mercadería vs Costo de Reposición Mensual (ARS)</div>
+    <div class="chart-container" style="height:300px;">
+      <canvas id="chartCompras"></canvas>
+    </div>
+  </div>
+
+  <!-- Gastos por rubro apilados -->
+  <div class="chart-card full" style="margin-bottom:22px;">
+    <div class="chart-title">Egresos por Rubro — Detalle Mensual (ARS)</div>
+    <div class="chart-container" style="height:340px;">
+      <canvas id="chartEgresosRubro"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabla resumen mensual -->
+  <div class="section-title">Resumen Mensual Completo</div>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Concepto</th>
+          <th>AGO 25</th>
+          <th>SEP 25</th>
+          <th>OCT 25</th>
+          <th>NOV 25</th>
+          <th>DIC 25</th>
+          <th>ENE 26</th>
+          <th>FEB 26</th>
+          <th>MAR 26</th>
+          <th>TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Total Ingresos</td>
+          <td>$111.421.572</td>
+          <td>$108.306.832</td>
+          <td>$117.611.755</td>
+          <td>$113.247.122</td>
+          <td>$129.293.709</td>
+          <td>$118.029.254</td>
+          <td>$110.962.660</td>
+          <td>$121.227.140</td>
+          <td><strong>$930.100.044</strong></td>
+        </tr>
+        <tr>
+          <td>— Costo de Ventas</td>
+          <td>$79.586.837</td>
+          <td>$77.362.023</td>
+          <td>$84.008.396</td>
+          <td>$80.890.801</td>
+          <td>$92.352.649</td>
+          <td>$84.306.610</td>
+          <td>$79.259.043</td>
+          <td>$86.590.814</td>
+          <td>$664.357.173</td>
+        </tr>
+        <tr>
+          <td>— Gastos de Empresa</td>
+          <td>$4.394.266</td>
+          <td>$3.586.164</td>
+          <td>$4.393.793</td>
+          <td>$3.890.987</td>
+          <td>$4.421.116</td>
+          <td>$4.114.252</td>
+          <td>$3.979.519</td>
+          <td>$5.241.571</td>
+          <td>$34.021.668</td>
+        </tr>
+        <tr>
+          <td>— Impuestos</td>
+          <td>$0</td>
+          <td>$0</td>
+          <td>$0</td>
+          <td>$0</td>
+          <td>$239.574</td>
+          <td>$0</td>
+          <td>$1.854.481</td>
+          <td>$0</td>
+          <td>$2.094.055</td>
+        </tr>
+        <tr>
+          <td>— Servicios</td>
+          <td>$4.228.318</td>
+          <td>$5.120.157</td>
+          <td>$5.177.038</td>
+          <td>$5.109.561</td>
+          <td>$5.732.858</td>
+          <td>$6.464.646</td>
+          <td>$6.454.403</td>
+          <td>$6.707.018</td>
+          <td>$44.993.999</td>
+        </tr>
+        <tr>
+          <td>— G. Bancarios</td>
+          <td>$3.899.170</td>
+          <td>$6.011.461</td>
+          <td>$2.856.026</td>
+          <td>$1.983.914</td>
+          <td>$4.278.878</td>
+          <td>$8.181.410</td>
+          <td>$4.371.378</td>
+          <td>$5.023.567</td>
+          <td>$36.605.804</td>
+        </tr>
+        <tr>
+          <td>— G. Mercado Pago</td>
+          <td>$1.459.825</td>
+          <td>$1.485.167</td>
+          <td>$1.470.729</td>
+          <td>$65.933</td>
+          <td>$5.940</td>
+          <td>$762.787</td>
+          <td>$2.121.428</td>
+          <td>$2.268.969</td>
+          <td>$9.640.778</td>
+        </tr>
+        <tr>
+          <td>— G. Posnet</td>
+          <td>$3.501.267</td>
+          <td>$3.680.795</td>
+          <td>$3.897.044</td>
+          <td>$2.546.439</td>
+          <td>$2.486.935</td>
+          <td>$1.976.586</td>
+          <td>$1.882.635</td>
+          <td>$1.713.457</td>
+          <td>$21.685.158</td>
+        </tr>
+        <tr>
+          <td>— Sueldos</td>
+          <td>$9.344.692</td>
+          <td>$9.741.801</td>
+          <td>$10.383.305</td>
+          <td>$9.226.029</td>
+          <td>$9.928.164</td>
+          <td>$10.652.559</td>
+          <td>$9.643.609</td>
+          <td>$10.550.821</td>
+          <td>$79.470.980</td>
+        </tr>
+        <tr class="total-row">
+          <td>Total Egresos</td>
+          <td>$106.414.375</td>
+          <td>$106.987.567</td>
+          <td>$112.186.332</td>
+          <td>$103.713.663</td>
+          <td>$119.446.115</td>
+          <td>$116.458.851</td>
+          <td>$109.566.495</td>
+          <td>$118.096.218</td>
+          <td>$892.869.616</td>
+        </tr>
+        <tr class="result-row">
+          <td><strong>Resultado Económico</strong></td>
+          <td class="positive">$5.007.197</td>
+          <td class="positive">$1.319.265</td>
+          <td class="positive">$5.425.423</td>
+          <td class="positive">$9.533.459</td>
+          <td class="positive">$9.847.594</td>
+          <td class="positive">$1.570.403</td>
+          <td class="positive">$1.396.165</td>
+          <td class="positive">$3.130.922</td>
+          <td class="positive"><strong>$37.230.428</strong></td>
+        </tr>
+        <tr class="result-row">
+          <td>Margen Neto</td>
+          <td class="positive">4,5%</td>
+          <td class="positive">1,2%</td>
+          <td class="positive">4,6%</td>
+          <td class="positive">8,4%</td>
+          <td class="positive">7,6%</td>
+          <td class="positive">1,3%</td>
+          <td class="positive">1,3%</td>
+          <td class="positive">2,6%</td>
+          <td class="positive"><strong>4,0%</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Tabla ventas por rubro -->
+  <div class="section-title">Ventas por Rubro (meses con detalle disponible)</div>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Rubro</th>
+          <th>SEP 25</th>
+          <th>OCT 25</th>
+          <th>NOV 25</th>
+          <th>DIC 25</th>
+          <th>ENE 26</th>
+          <th>FEB 26</th>
+          <th>MAR 26</th>
+          <th>% Prom.</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Carnes</td><td>$26.540.260</td><td>$27.571.700</td><td>$30.265.297</td><td>$34.932.164</td><td>$33.793.790</td><td>$33.420.044</td><td>$35.909.483</td><td>28%</td></tr>
+        <tr><td>Fiambres</td><td>$16.616.477</td><td>$17.955.248</td><td>$16.605.684</td><td>$19.200.330</td><td>$16.668.538</td><td>$15.088.838</td><td>$16.196.805</td><td>14%</td></tr>
+        <tr><td>Comestibles</td><td>$15.429.508</td><td>$15.849.479</td><td>$14.621.153</td><td>$17.276.845</td><td>$14.716.623</td><td>$12.754.148</td><td>$13.600.693</td><td>12%</td></tr>
+        <tr><td>Verduras</td><td>$10.574.671</td><td>$10.638.808</td><td>$11.549.149</td><td>$11.206.811</td><td>$11.264.490</td><td>$9.878.200</td><td>$12.400.155</td><td>9%</td></tr>
+        <tr><td>Bebidas</td><td>$10.042.898</td><td>$11.722.082</td><td>$10.857.148</td><td>$14.405.895</td><td>$11.103.874</td><td>$10.656.962</td><td>$10.693.670</td><td>10%</td></tr>
+        <tr><td>Panificación</td><td>$6.146.914</td><td>$6.543.264</td><td>$6.422.702</td><td>$7.669.107</td><td>$5.944.488</td><td>$5.801.779</td><td>$6.429.398</td><td>5%</td></tr>
+        <tr><td>Pollo</td><td>$4.420.985</td><td>$5.160.206</td><td>$4.192.889</td><td>$4.439.220</td><td>$5.373.261</td><td>$5.200.639</td><td>$5.069.261</td><td>4%</td></tr>
+        <tr><td>Lácteos</td><td>$3.976.763</td><td>$5.196.096</td><td>$4.550.907</td><td>$5.051.379</td><td>$4.347.987</td><td>$4.432.840</td><td>$4.944.339</td><td>4%</td></tr>
+        <tr><td>Limpieza</td><td>$3.531.150</td><td>$3.745.472</td><td>$3.818.332</td><td>$4.215.985</td><td>$4.026.507</td><td>$3.364.071</td><td>$3.848.176</td><td>3%</td></tr>
+        <tr><td>Kiosco</td><td>$3.172.235</td><td>$3.175.008</td><td>$2.693.881</td><td>$3.156.355</td><td>$2.143.332</td><td>$2.300.935</td><td>$3.350.391</td><td>2%</td></tr>
+        <tr><td>Otros</td><td colspan="7" style="text-align:center;color:rgba(232,234,236,.35);">Cerdo, Rotisería, Perfumería, Frescos, Congelados, Varios</td><td>9%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<footer>Dashboard generado — Supermercado Don Américo | Datos: Agosto 2025 – Marzo 2026</footer>
+
+<script>
+const meses = ['AGO 25','SEP 25','OCT 25','NOV 25','DIC 25','ENE 26','FEB 26','MAR 26'];
+
+const ingresos  = [111421572, 108306832, 117611755, 113247122, 129293709, 118029254, 110962660, 121227140];
+const egresos   = [106414375, 106987567, 112186332, 103713663, 119446115, 116458851, 109566495, 118096218];
+const resultado = [5007197,   1319265,   5425423,   9533459,   9847594,   1570403,   1396165,   3130922];
+
+const costoVentas  = [79586837, 77362023, 84008396, 80890801, 92352649, 84306610, 79259043, 86590814];
+const gastosEmpresa= [4394266,  3586164,  4393793,  3890987,  4421116,  4114252,  3979519,  5241571];
+const impuestos    = [0,        0,        0,        0,        239574,   0,        1854481,  0];
+const servicios    = [4228318,  5120157,  5177038,  5109561,  5732858,  6464646,  6454403,  6707018];
+const bancarios    = [3899170,  6011461,  2856026,  1983914,  4278878,  8181410,  4371378,  5023567];
+const mercadopago  = [1459825,  1485167,  1470729,  65933,    5940,     762787,   2121428,  2268969];
+const posnet       = [3501267,  3680795,  3897044,  2546439,  2486935,  1976586,  1882635,  1713457];
+const sueldos      = [9344692,  9741801,  10383305, 9226029,  9928164,  10652559, 9643609,  10550821];
+
+const fmt = v => '$' + (v/1000000).toFixed(1) + 'M';
+
+const gridColor = 'rgba(255,255,255,0.06)';
+const tickColor = 'rgba(232,234,236,0.45)';
+const legendColor = 'rgba(232,234,236,0.8)';
+
+// Paleta CIAF para categorías
+const ciafCat = [
+  '#1E4A82',  // brand     — Costo Ventas
+  '#F26522',  // accent    — Sueldos
+  '#2D6CB8',  // brand-2   — Servicios
+  '#E74C3C',  // negative  — G. Bancarios
+  '#16A085',  // teal      — Gastos Empresa
+  '#8E44AD',  // purple    — G. Posnet
+  '#F39C12',  // amber     — G. Mercado Pago
+  '#C0392B',  // dark-red  — Impuestos
+];
+
+// ── Gráfico 1: Evolución ──────────────────────────────────────
+new Chart(document.getElementById('chartEvolucion'), {
+  type: 'bar',
+  data: {
+    labels: meses,
+    datasets: [
+      {
+        label: 'Total Ingresos',
+        data: ingresos,
+        backgroundColor: 'rgba(45,108,184,0.70)',
+        borderColor: '#2D6CB8',
+        borderWidth: 1,
+        order: 2
+      },
+      {
+        label: 'Total Egresos',
+        data: egresos,
+        backgroundColor: 'rgba(231,76,60,0.60)',
+        borderColor: '#E74C3C',
+        borderWidth: 1,
+        order: 3
+      },
+      {
+        label: 'Resultado Económico',
+        data: resultado,
+        type: 'line',
+        borderColor: '#2ECC71',
+        backgroundColor: 'rgba(46,204,113,0.12)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#2ECC71',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: false,
+        tension: 0.3,
+        yAxisID: 'yResult',
+        order: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: legendColor, padding: 16, font: { size: 12, family: 'Open Sans' } } },
+      tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+    },
+    scales: {
+      x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+      y: {
+        ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } },
+        grid: { color: gridColor },
+        title: { display: true, text: 'Ingresos / Egresos', color: tickColor, font: { family: 'Open Sans' } }
+      },
+      yResult: {
+        position: 'right',
+        ticks: { color: '#2ECC71', callback: v => fmt(v), font: { family: 'JetBrains Mono' } },
+        grid: { drawOnChartArea: false },
+        title: { display: true, text: 'Resultado', color: '#2ECC71', font: { family: 'Open Sans' } }
+      }
+    }
+  }
+});
+
+// ── Gráfico 2: Resultado mensual ─────────────────────────────
+new Chart(document.getElementById('chartResultado'), {
+  type: 'bar',
+  data: {
+    labels: meses,
+    datasets: [{
+      label: 'Resultado Económico',
+      data: resultado,
+      backgroundColor: resultado.map(v => v >= 0 ? 'rgba(46,204,113,0.75)' : 'rgba(231,76,60,0.75)'),
+      borderColor:     resultado.map(v => v >= 0 ? '#2ECC71' : '#E74C3C'),
+      borderWidth: 1.5,
+      borderRadius: 5
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)}` } }
+    },
+    scales: {
+      x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
+    }
+  }
+});
+
+// ── Gráfico 3: Donut composición ────────────────────────────
+const promedios = [
+  costoVentas.reduce((a,b)=>a+b,0),
+  sueldos.reduce((a,b)=>a+b,0),
+  servicios.reduce((a,b)=>a+b,0),
+  bancarios.reduce((a,b)=>a+b,0),
+  gastosEmpresa.reduce((a,b)=>a+b,0),
+  posnet.reduce((a,b)=>a+b,0),
+  mercadopago.reduce((a,b)=>a+b,0),
+  impuestos.reduce((a,b)=>a+b,0),
+];
+new Chart(document.getElementById('chartDonut'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Costo Ventas','Sueldos','Servicios','G. Bancarios','Gastos Empresa','G. Posnet','G. Mercado Pago','Impuestos'],
+    datasets: [{
+      data: promedios,
+      backgroundColor: ciafCat,
+      borderColor: '#132239',
+      borderWidth: 2
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '62%',
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: { color: legendColor, padding: 10, font: { size: 11, family: 'Open Sans' }, boxWidth: 12 }
+      },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct = ((ctx.raw/total)*100).toFixed(1);
+            return ` ${ctx.label}: ${fmt(ctx.raw)} (${pct}%)`;
+          }
+        }
+      }
+    }
+  }
+});
+
+// ── Gráfico compras de mercadería ────────────────────────────
+const comprasMercaderia = [85626102, 87371294, 93675401, 93459146, 103023529, 91670101, 82475321, 95738691];
+const totalCompras = comprasMercaderia.reduce((a,b)=>a+b,0);
+
+new Chart(document.getElementById('chartCompras'), {
+  type: 'bar',
+  data: {
+    labels: meses,
+    datasets: [
+      {
+        label: 'Compra de Mercadería',
+        data: comprasMercaderia,
+        backgroundColor: 'rgba(242,101,34,0.72)',
+        borderColor: '#F26522',
+        borderWidth: 1.5,
+        borderRadius: 5,
+        order: 2
+      },
+      {
+        label: 'Costo de Reposición',
+        data: costoVentas,
+        type: 'line',
+        borderColor: '#E74C3C',
+        backgroundColor: 'rgba(231,76,60,0.10)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#E74C3C',
+        pointRadius: 5,
+        fill: false,
+        tension: 0.3,
+        order: 1
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: legendColor, padding: 16, font: { size: 12, family: 'Open Sans' } } },
+      tooltip: {
+        mode: 'index', intersect: false,
+        callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}`,
+          afterBody: items => {
+            const compra = items.find(i => i.datasetIndex === 0);
+            const costo  = items.find(i => i.datasetIndex === 1);
+            if (compra && costo) {
+              const diff = compra.raw - costo.raw;
+              return [``, ` Diferencia (compra - costo): ${fmt(diff)}`];
+            }
+          }
+        }
+      },
+      subtitle: {
+        display: true,
+        text: `Total acumulado compras: ${fmt(totalCompras)}  |  Promedio mensual: ${fmt(totalCompras/8)}`,
+        color: 'rgba(232,234,236,0.45)',
+        font: { size: 11, family: 'Open Sans' },
+        padding: { bottom: 10 }
+      }
+    },
+    scales: {
+      x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
+    }
+  }
+});
+
+// ── Gráfico 4: Egresos apilados por rubro ────────────────────
+new Chart(document.getElementById('chartEgresosRubro'), {
+  type: 'bar',
+  data: {
+    labels: meses,
+    datasets: [
+      { label: 'Costo Ventas',    data: costoVentas,    backgroundColor: ciafCat[0], stack: 'stack' },
+      { label: 'Sueldos',         data: sueldos,         backgroundColor: ciafCat[1], stack: 'stack' },
+      { label: 'Servicios',       data: servicios,       backgroundColor: ciafCat[2], stack: 'stack' },
+      { label: 'G. Bancarios',    data: bancarios,       backgroundColor: ciafCat[3], stack: 'stack' },
+      { label: 'Gastos Empresa',  data: gastosEmpresa,   backgroundColor: ciafCat[4], stack: 'stack' },
+      { label: 'G. Posnet',       data: posnet,          backgroundColor: ciafCat[5], stack: 'stack' },
+      { label: 'G. Mercado Pago', data: mercadopago,     backgroundColor: ciafCat[6], stack: 'stack' },
+      { label: 'Impuestos',       data: impuestos,       backgroundColor: ciafCat[7], stack: 'stack' },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: legendColor, padding: 12, font: { size: 11, family: 'Open Sans' }, boxWidth: 12 } },
+      tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
+    },
+    scales: {
+      x: { stacked: true, ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+      y: { stacked: true, ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
+    }
+  }
+});
+</script>
+</body>
+</html>

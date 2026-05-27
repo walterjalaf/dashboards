@@ -4,214 +4,262 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Económico - Supermercado Don Américo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; }
+:root {
+  --ink:       #0E1F33;
+  --brand:     #1E4A82;
+  --brand-2:   #2D6CB8;
+  --pearl:     #E8EAEC;
+  --accent:    #F26522;
+  --line:      rgba(255,255,255,.10);
+  --surface:   #132239;
+  --surface-2: #0a1829;
+  --positive:  #2ECC71;
+  --negative:  #E74C3C;
+}
 
-  .header {
-    background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%);
-    padding: 22px 40px;
-    border-bottom: 3px solid #3b82f6;
-  }
-  .header-top { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-  .header h1 { font-size: 1.9rem; font-weight: 700; letter-spacing: 0.5px; }
-  .header p  { color: #93c5fd; margin-top: 4px; font-size: 0.9rem; }
-  .header-controls {
-    display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-top: 4px;
-  }
-  #file-status { font-size: 0.78rem; color: #93c5fd; max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .btn-hdr {
-    background: rgba(59,130,246,0.25); border: 1px solid #3b82f6; color: #93c5fd;
-    border-radius: 8px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer;
-    font-family: inherit; transition: background .15s, color .15s;
-  }
-  .btn-hdr:hover { background: rgba(59,130,246,0.45); color: #fff; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Open Sans', sans-serif;
+  background: var(--ink);
+  color: var(--pearl);
+}
 
-  /* Filter bar */
-  .filter-bar {
-    background: #111827;
-    border-bottom: 1px solid #1e293b;
-    padding: 10px 40px;
-    display: none;
-    align-items: center;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-  .filter-group { display: flex; align-items: center; gap: 8px; }
-  .filter-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1px; color: #475569; white-space: nowrap; }
-  .filter-pills { display: flex; gap: 5px; flex-wrap: wrap; }
-  .filter-sep { width: 1px; height: 22px; background: #1e293b; flex-shrink: 0; }
-  .pill {
-    background: transparent; border: 1px solid #334155; color: #64748b;
-    border-radius: 20px; padding: 3px 12px; font-size: 0.72rem; cursor: pointer;
-    font-family: inherit; transition: all .12s; line-height: 1.6;
-  }
-  .pill:hover { border-color: #3b82f6; color: #93c5fd; }
-  .pill.active { background: rgba(59,130,246,0.18); border-color: #3b82f6; color: #93c5fd; font-weight: 600; }
+.header {
+  background: linear-gradient(135deg, var(--ink) 0%, var(--brand) 100%);
+  padding: 18px 40px;
+  border-bottom: 3px solid var(--brand-2);
+}
+.header-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.header-identity { display: flex; align-items: center; gap: 16px; }
+.header h1 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.75rem; font-weight: 700; letter-spacing: 0.3px; color: #fff;
+}
+.header p  { color: rgba(232,234,236,.72); margin-top: 3px; font-size: 0.88rem; }
+.header-controls {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+#file-status {
+  font-size: 0.78rem; color: var(--brand-2);
+  max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.btn-hdr {
+  background: rgba(45,108,184,0.22); border: 1px solid var(--brand-2); color: rgba(232,234,236,.8);
+  border-radius: 8px; padding: 6px 14px; font-size: 0.78rem; cursor: pointer;
+  font-family: 'Open Sans', sans-serif; transition: background .15s, color .15s;
+}
+.btn-hdr:hover { background: rgba(45,108,184,0.45); color: #fff; }
 
-  .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
+/* Filter bar */
+.filter-bar {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 40px;
+  display: none;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.filter-group { display: flex; align-items: center; gap: 8px; }
+.filter-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.1px;
+  color: rgba(232,234,236,.4); white-space: nowrap;
+}
+.filter-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.filter-sep { width: 1px; height: 22px; background: var(--line); flex-shrink: 0; }
+.pill {
+  background: transparent; border: 1px solid var(--line); color: rgba(232,234,236,.45);
+  border-radius: 20px; padding: 3px 12px; font-size: 0.72rem; cursor: pointer;
+  font-family: 'Open Sans', sans-serif; transition: all .12s; line-height: 1.6;
+}
+.pill:hover { border-color: var(--brand-2); color: rgba(232,234,236,.85); }
+.pill.active { background: rgba(45,108,184,.2); border-color: var(--brand-2); color: rgba(232,234,236,.95); font-weight: 600; }
 
-  /* KPI Cards */
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
-    margin-bottom: 28px;
-  }
-  .kpi-card {
-    background: #1e293b;
-    border-radius: 12px;
-    padding: 20px 22px;
-    border: 1px solid #334155;
-    position: relative;
-    overflow: hidden;
-  }
-  .kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-  }
-  .kpi-card.blue::before  { background: #3b82f6; }
-  .kpi-card.red::before   { background: #ef4444; }
-  .kpi-card.green::before { background: #22c55e; }
-  .kpi-card.yellow::before{ background: #f59e0b; }
+.container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
 
-  .kpi-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 8px; }
-  .kpi-value { font-size: 1.55rem; font-weight: 700; }
-  .kpi-value.blue   { color: #60a5fa; }
-  .kpi-value.red    { color: #f87171; }
-  .kpi-value.green  { color: #4ade80; }
-  .kpi-value.yellow { color: #fbbf24; }
-  .kpi-sub { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+/* KPI Cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.kpi-card.blue::before   { background: var(--brand-2); }
+.kpi-card.red::before    { background: var(--negative); }
+.kpi-card.green::before  { background: var(--positive); }
+.kpi-card.yellow::before { background: var(--accent); }
 
-  /* Chart layout */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 22px;
-    margin-bottom: 22px;
-  }
-  .chart-card {
-    background: #1e293b;
-    border-radius: 12px;
-    padding: 22px;
-    border: 1px solid #334155;
-  }
-  .chart-card.full { grid-column: 1 / -1; }
-  .chart-title {
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #94a3b8;
-    margin-bottom: 18px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #334155;
-  }
-  .chart-container { position: relative; }
+.kpi-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.67rem; text-transform: uppercase; letter-spacing: 1.2px;
+  color: rgba(232,234,236,.52); margin-bottom: 8px;
+}
+.kpi-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.45rem; font-weight: 700;
+}
+.kpi-value.blue   { color: var(--brand-2); }
+.kpi-value.red    { color: var(--negative); }
+.kpi-value.green  { color: var(--positive); }
+.kpi-value.yellow { color: var(--accent); }
+.kpi-sub { font-size: 0.72rem; color: rgba(232,234,236,.38); margin-top: 4px; }
 
-  /* Table */
-  .table-card {
-    background: #1e293b;
-    border-radius: 12px;
-    padding: 22px;
-    border: 1px solid #334155;
-    margin-bottom: 22px;
-    overflow-x: auto;
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-  th {
-    background: #0f172a;
-    padding: 10px 14px;
-    text-align: right;
-    color: #94a3b8;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  th:first-child { text-align: left; }
-  td { padding: 9px 14px; text-align: right; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
-  td:first-child { text-align: left; color: #e2e8f0; font-weight: 500; }
-  tr:hover td { background: #263348; }
-  tr.total-row td { background: #172033; font-weight: 700; color: #60a5fa; border-top: 2px solid #3b82f6; }
-  tr.result-row td { font-weight: 700; font-size: 0.9rem; }
-  tr.result-row td.positive { color: #4ade80; }
-  tr.result-row td.negative { color: #f87171; }
+/* Chart layout */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+.chart-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+}
+.chart-card.full { grid-column: 1 / -1; }
+.chart-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.74rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: rgba(232,234,236,.48);
+  margin-bottom: 18px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.chart-container { position: relative; }
 
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-  }
-  .badge.positive { background: rgba(34,197,94,0.15); color: #4ade80; }
-  .badge.negative { background: rgba(239,68,68,0.15); color: #f87171; }
+/* Table */
+.table-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  margin-bottom: 22px;
+  overflow-x: auto;
+}
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th {
+  background: var(--surface-2);
+  padding: 10px 14px;
+  text-align: right;
+  color: rgba(232,234,236,.52);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.7px;
+}
+th:first-child { text-align: left; }
+td {
+  padding: 9px 14px; text-align: right;
+  border-bottom: 1px solid var(--line);
+  color: rgba(232,234,236,.72);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.77rem;
+}
+td:first-child { text-align: left; color: #fff; font-family: 'Open Sans', sans-serif; font-weight: 500; }
+tr:hover td { background: rgba(45,108,184,.07); }
+tr.total-row td { background: rgba(30,74,130,.22); font-weight: 700; color: var(--brand-2); border-top: 2px solid var(--brand); }
+tr.total-row td:first-child { color: #fff; }
+tr.result-row td { font-weight: 700; font-size: 0.9rem; }
+tr.result-row td.positive { color: var(--positive); }
+tr.result-row td.negative { color: var(--negative); }
 
-  .section-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #93c5fd;
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .section-title::before { content: ''; display: block; width: 4px; height: 18px; background: #3b82f6; border-radius: 2px; }
+.badge {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 0.7rem; font-weight: 600;
+}
+.badge.positive { background: rgba(46,204,113,.15); color: var(--positive); }
+.badge.negative { background: rgba(231,76,60,.15);  color: var(--negative); }
 
-  /* Empty state */
-  .empty-state { padding: 32px; text-align: center; color: #475569; font-size: 0.88rem; }
+.section-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1rem; font-weight: 600;
+  color: var(--brand-2);
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::before { content: ''; display: block; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
 
-  /* Modal de configuración */
-  .cfg-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.72);
-    display: none; align-items: center; justify-content: center; z-index: 1000;
-  }
-  .cfg-overlay.open { display: flex; }
-  .cfg-box {
-    background: #1e293b; border: 1px solid #334155; border-top: 2px solid #3b82f6;
-    border-radius: 14px; width: min(500px, 92vw);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.65);
-  }
-  .cfg-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #334155; }
-  .cfg-header h2 { font-size: 0.92rem; font-weight: 700; color: #e2e8f0; margin: 0; }
-  .cfg-close { background: transparent; border: 0; color: #64748b; font-size: 1.3rem; cursor: pointer; padding: 0 4px; line-height: 1; }
-  .cfg-close:hover { color: #e2e8f0; }
-  .cfg-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
-  .cfg-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid #334155; }
-  .cfg-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; color: #94a3b8; }
-  .cfg-input {
-    width: 100%; color: #e2e8f0; background: #0f172a; border: 1px solid #334155;
-    border-radius: 7px; padding: 8px 12px; font-size: 0.78rem; font-family: inherit;
-  }
-  .cfg-input:focus { outline: none; border-color: #3b82f6; }
-  .cfg-input::placeholder { color: #475569; }
-  .cfg-help {
-    font-size: 0.7rem; color: #94a3b8; line-height: 1.55;
-    background: rgba(59,130,246,0.1); border-left: 2px solid #3b82f6;
-    padding: 8px 12px; border-radius: 4px;
-  }
-  .cfg-test { font-size: 0.75rem; min-height: 1.1em; }
-  .cfg-test.ok    { color: #4ade80; }
-  .cfg-test.error { color: #f87171; }
-  .btn-primary { background: #3b82f6; color: #fff; border: none; border-radius: 7px; padding: 7px 16px; font-size: 0.78rem; cursor: pointer; font-weight: 700; font-family: inherit; }
-  .btn-primary:hover { background: #2563eb; }
-  .btn-secondary { background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 7px; padding: 7px 14px; font-size: 0.78rem; cursor: pointer; font-family: inherit; }
-  .btn-secondary:hover { background: #263348; color: #e2e8f0; }
+/* Empty state */
+.empty-state { padding: 32px; text-align: center; color: rgba(232,234,236,.35); font-size: 0.88rem; }
 
-  footer { text-align: center; padding: 20px; color: #475569; font-size: 0.75rem; }
+/* Modal de configuración */
+.cfg-overlay {
+  position: fixed; inset: 0; background: rgba(8,16,28,.78);
+  display: none; align-items: center; justify-content: center; z-index: 1000;
+}
+.cfg-overlay.open { display: flex; }
+.cfg-box {
+  background: var(--surface); border: 1px solid var(--line); border-top: 2px solid var(--brand-2);
+  border-radius: 14px; width: min(500px, 92vw);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.65);
+}
+.cfg-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+.cfg-header h2 { font-family: 'Montserrat', sans-serif; font-size: 0.92rem; font-weight: 700; color: #fff; margin: 0; }
+.cfg-close { background: transparent; border: 0; color: rgba(232,234,236,.4); font-size: 1.3rem; cursor: pointer; padding: 0 4px; line-height: 1; }
+.cfg-close:hover { color: #fff; }
+.cfg-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+.cfg-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--line); }
+.cfg-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; color: rgba(232,234,236,.55); }
+.cfg-input {
+  width: 100%; color: var(--pearl); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 8px 12px; font-size: 0.78rem; font-family: 'Open Sans', sans-serif;
+}
+.cfg-input:focus { outline: none; border-color: var(--brand-2); }
+.cfg-input::placeholder { color: rgba(232,234,236,.25); }
+.cfg-help {
+  font-size: 0.7rem; color: rgba(232,234,236,.55); line-height: 1.55;
+  background: rgba(45,108,184,.12); border-left: 2px solid var(--brand-2);
+  padding: 8px 12px; border-radius: 4px;
+}
+.cfg-test { font-size: 0.75rem; min-height: 1.1em; }
+.cfg-test.ok    { color: var(--positive); }
+.cfg-test.error { color: var(--negative); }
+.btn-primary {
+  background: var(--brand-2); color: #fff; border: none;
+  border-radius: 7px; padding: 7px 16px; font-size: 0.78rem;
+  cursor: pointer; font-weight: 700; font-family: 'Open Sans', sans-serif;
+}
+.btn-primary:hover { background: var(--brand); }
+.btn-secondary {
+  background: transparent; color: rgba(232,234,236,.6); border: 1px solid var(--line);
+  border-radius: 7px; padding: 7px 14px; font-size: 0.78rem;
+  cursor: pointer; font-family: 'Open Sans', sans-serif;
+}
+.btn-secondary:hover { background: rgba(45,108,184,.12); color: var(--pearl); }
+
+footer { text-align: center; padding: 20px; color: rgba(232,234,236,.25); font-size: 0.75rem; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-top">
-    <div>
-      <h1>Supermercado Don Américo — Análisis Económico</h1>
-      <p id="headerPeriod">Conectando a Google Drive…</p>
+    <div class="header-identity">
+      <img src="logo_grande.png" alt="CIAF" style="height:52px;width:auto;object-fit:contain;flex-shrink:0;">
+      <div>
+        <h1>Supermercado Don Américo — Análisis Económico</h1>
+        <p id="headerPeriod">Conectando a Google Drive…</p>
+      </div>
     </div>
     <div class="header-controls">
       <span id="file-status"></span>
@@ -341,6 +389,10 @@ const isWorkbook  = f => f.mimeType === XLSX_MIME || f.mimeType === GSHEET_MIME;
 
 const MES_ABREV_LABELS = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
 
+// Formateadores únicos — ARS estándar: miles=. decimal=, 2 decimales
+const fmtARS = v => '$' + new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+const fmtPct = v => new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + '%';
+
 let CONFIG = {
   apiKey:   'AIzaSyAduvvGyXxyntmoMJQR_pnczbqatXW8q0c',
   folderId: '1f3ttYW0S_U1YIiVufXQol3Pq7rfeQQxI'
@@ -419,7 +471,7 @@ function showStatus(msg, type) {
   const el = document.getElementById('file-status');
   if (!el) return;
   el.textContent = msg;
-  el.style.color = type === 'ok' ? '#4ade80' : type === 'error' ? '#f87171' : '#93c5fd';
+  el.style.color = type === 'ok' ? '#2ECC71' : type === 'error' ? '#E74C3C' : '#2D6CB8';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -608,6 +660,7 @@ function parseMonthlySummary(wb) {
 
   const allRows = Object.values(sheetRows).flat();
 
+  // findValInRows: busca la primera celda con valor > 0 adyacente al label
   const findValInRows = (rows, patterns) => {
     const test = lbl => patterns.some(p => (p instanceof RegExp) ? p.test(lbl) : lbl === p);
     for (let ri = 0; ri < rows.length; ri++) {
@@ -638,19 +691,115 @@ function parseMonthlySummary(wb) {
     return 0;
   };
 
-  const ingresos      = findVal([/^ECONOMICO VENTAS$/, /^TOTAL INGRESOS$/, /^VENTAS$/]);
-  const costoVentas   = findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
-  const gastosEmpresa = findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
-  const impuestos     = findVal([/^IMPUESTOS$/, /^3\) IMPUESTOS$/]);
-  const servicios     = findVal([/^SERVICIOS$/, /^4\) SERVICIOS$/]);
-  const bancarios     = findVal([/^GASTOS Y COMISIONES BANCARIAS$/, /^5\) GASTOS Y COMISIONES BANCARIAS$/]);
-  const mercadopago   = findVal([/^GASTOS Y COMISIONES MERCADO PAGO$/, /^6\) GASTOS Y COMISIONES MERCADO PAGO$/]);
-  const posnet        = findVal([/^GASTOS Y COMISIONES POSNET\s*$/, /^7\) GASTOS Y COMISIONES POSNET\s*$/]);
-  const sueldos       = findVal([/^EMPLEADOS$/, /^SUELDOS$/, /^8\) SUELDOS$/]);
-  const resultado     = findVal([/^RESULTADO ECONOMICO$/]);
+  // findValAcceptZero: como findVal pero ACEPTA 0 como valor válido.
+  // Necesario para "3) IMPUESTOS": si el label existe con valor 0, debe devolver 0
+  // y NO seguir buscando (evita que el sub-label IMPUESTOS dentro de bancarios lo pise).
+  const findValAcceptZero = patterns => {
+    const test = lbl => patterns.some(p => (p instanceof RegExp) ? p.test(lbl) : lbl === p);
+    for (const rows of Object.values(sheetRows)) {
+      for (let ri = 0; ri < rows.length; ri++) {
+        const cells = rows[ri];
+        for (let ci = 0; ci < cells.length; ci++) {
+          if (!test(cells[ci].label)) continue;
+          for (let j = ci + 1; j < cells.length; j++) {
+            const raw = cells[j].raw;
+            if (raw != null && raw !== '') return parseARS(raw); // acepta 0
+          }
+          return 0; // label encontrado sin valor adyacente = 0
+        }
+      }
+    }
+    return null; // label no existe en ninguna hoja
+  };
 
-  let compras = costoVentas;
-  {
+  // parseRaw: como parseARS pero PRESERVA el signo (para resultado económico)
+  const parseRaw = v => {
+    if (v == null || v === '' || v === '-') return null;
+    if (typeof v === 'number') return v;
+    let s = String(v).replace(/"/g, '').replace(/[$\s]/g, '');
+    if (!s || s === '-' || s === '$-') return 0;
+    const neg = s.startsWith('-') || (s.startsWith('(') && s.endsWith(')'));
+    if (neg) s = s.replace(/^-/, '').replace(/^\(/, '').replace(/\)$/, '');
+    const dotCount = (s.match(/\./g) || []).length;
+    const commaCount = (s.match(/,/g) || []).length;
+    if (commaCount > 0 && dotCount > 0) {
+      s = s.lastIndexOf('.') > s.lastIndexOf(',') ? s.replace(/,/g, '') : s.replace(/\./g, '').replace(',', '.');
+    } else if (commaCount > 0) {
+      const parts = s.split(',');
+      s = parts.length === 2 && parts[1].length <= 2 ? parts[0] + '.' + parts[1] : s.replace(/,/g, '');
+    } else if (dotCount > 1) {
+      s = s.replace(/\./g, '');
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? null : (neg ? -n : n);
+  };
+
+  // findSigned: busca un valor preservando el signo negativo (para resultado)
+  const findSigned = patterns => {
+    const test = lbl => patterns.some(p => (p instanceof RegExp) ? p.test(lbl) : lbl === p);
+    for (const rows of Object.values(sheetRows)) {
+      for (let ri = 0; ri < rows.length; ri++) {
+        const cells = rows[ri];
+        for (let ci = 0; ci < cells.length; ci++) {
+          if (!test(cells[ci].label)) continue;
+          for (let j = ci + 1; j < cells.length; j++) {
+            const n = parseRaw(cells[j].raw);
+            if (n !== null) return n;
+          }
+          for (let rj = ri + 1; rj <= Math.min(ri + 5, rows.length - 1); rj++) {
+            const nr = rows[rj];
+            for (let cj = ci; cj <= Math.min(ci + 2, (nr?.length || 0) - 1); cj++) {
+              const n = parseRaw(nr[cj]?.raw);
+              if (n !== null) return n;
+            }
+          }
+        }
+      }
+    }
+    return 0;
+  };
+
+  // ── DATA STUDIO: hoja estable con labels en col A (filas 2-17) y valores en col B ──
+  // Presente en TODOS los formatos (ENE/FEB legacy y MAR/ABR nuevo). Tiene precedencia
+  // sobre cualquier búsqueda genérica porque sus valores son los canónicos normalizados.
+  //   B2=VENTAS  B3=COSTO DE VENTAS  B4=GASTOS  B5=IMPUESTOS  B6=SERVICIOS
+  //   B7=EMPLEADOS  B9=G.BANCARIAS  B10=G.MP  B11=G.POSNET  B13=RESULTADO  B17=COMPRAS
+  const dsSheetName = wb.SheetNames.find(n => n.toUpperCase().replace(/\s/g, '') === 'DATASTUDIO');
+  const dsMap = {};
+  if (dsSheetName && sheetRows[dsSheetName]) {
+    for (const row of sheetRows[dsSheetName]) {
+      const lbl = row[0]?.label;
+      const raw = row[1]?.raw;
+      if (lbl && lbl.length > 1 && raw != null && raw !== '') dsMap[lbl] = raw;
+    }
+  }
+  console.log('[Parser] DATA STUDIO sheet:', dsSheetName, '| Keys:', Object.keys(dsMap));
+  // ds: devuelve parseARS(valor) o null si la clave no existe en DATA STUDIO
+  const ds    = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseARS(v); } return null; };
+  const dsSgn = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseRaw(v);  } return null; };
+
+  // ── KPIs: DATA STUDIO primero → fallback a búsqueda genérica ──────────────────
+  const ingresos      = ds('VENTAS') ?? findVal([/^ECONOMICO VENTAS$/, /^TOTAL INGRESOS$/, /^VENTAS$/]);
+  const costoVentas   = ds('COSTO DE VENTAS') ?? findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
+  const gastosEmpresa = ds('GASTOS') ?? findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
+
+  // Impuestos: DATA STUDIO tiene el valor real (0 en ENE/MAR/ABR = carga trimestral en FEB).
+  // Si no hay DATA STUDIO, mantener lógica de label numerado para no confundir sub-labels.
+  const impuestosDS  = ds('IMPUESTOS');
+  const impuestosNum = impuestosDS !== null ? impuestosDS : findValAcceptZero([/^3\) IMPUESTOS$/]);
+  const impuestos    = impuestosNum !== null ? impuestosNum : findVal([/^IMPUESTOS$/]);
+
+  const servicios     = ds('SERVICIOS') ?? findVal([/^SERVICIOS$/, /^4\) SERVICIOS$/]);
+  const bancarios     = ds('GASTOS Y COMISIONES BANCARIAS') ?? findVal([/^GASTOS Y COMISIONES BANCARIAS$/, /^5\) GASTOS Y COMISIONES BANCARIAS$/]);
+  const mercadopago   = ds('GASTOS Y COMISIONES MERCADO PAGO') ?? findVal([/^GASTOS Y COMISIONES MERCADO PAGO$/, /^6\) GASTOS Y COMISIONES MERCADO PAGO$/]);
+  const posnet        = ds('GASTOS Y COMISIONES POSNET') ?? findVal([/^GASTOS Y COMISIONES POSNET\s*$/, /^7\) GASTOS Y COMISIONES POSNET\s*$/]);
+  const sueldos       = ds('EMPLEADOS') ?? findVal([/^EMPLEADOS$/, /^SUELDOS$/, /^8\) SUELDOS$/]);
+  const resultado     = dsSgn('RESULTADO ECONOMICO') ?? findSigned([/^RESULTADO ECONOMICO$/]);
+
+  // ── Compras: DATA STUDIO B17 = total compra mensual de mercadería ─────────────
+  let compras = ds('COMPRAS');
+  if (compras === null) {
+    compras = costoVentas;
     const found = [];
     for (const cells of allRows) {
       for (let i = 0; i < cells.length; i++) {
@@ -665,34 +814,76 @@ function parseMonthlySummary(wb) {
         }
       }
     }
+    let blancoVal = 0, negroVal = 0;
+    for (const cells of allRows) {
+      for (let i = 0; i < cells.length; i++) {
+        if (/^COMPRA DE MERCADERIA EN BLANCO$/.test(cells[i].label)) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const raw = cells[j].raw;
+            if (raw != null && raw !== '') { const n = parseARS(raw); if (n > 0) { blancoVal = n; break; } }
+          }
+        }
+        if (/^COMPRA DE MERCADERIA EN NEGRO$/.test(cells[i].label)) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const raw = cells[j].raw;
+            if (raw != null && raw !== '') { const n = parseARS(raw); if (n > 0) { negroVal = n; break; } }
+          }
+        }
+      }
+    }
+    if (blancoVal + negroVal > 0) found.push(blancoVal + negroVal);
     const big = found.filter(n => n >= costoVentas);
     if (big.length) compras = Math.max(...big);
     else if (found.length) compras = Math.max(...found);
   }
 
+  // ── Rubros de ventas ──────────────────────────────────────────────────────────
+  // Fuente: ECONOMICO (formato MAR/ABR) o ESTADOS (formato ENE/FEB).
+  // Buscar por nombre canónico en col A — el orden de filas varía entre meses.
   const rubros = {};
-  const stopRe = /FORMAS DE COBROS|TOTAL EGRESOS|EGRESOS POR RUBROS|TOTAL COBROS|FINANCIERO/;
-  outer: for (const rows of Object.values(sheetRows)) {
-    for (let ri = 0; ri < rows.length; ri++) {
-      if (!/CLASIF.*VENTAS.*RUBROS/.test(rows[ri][0]?.label || '')) continue;
-      for (let rj = ri + 1; rj < Math.min(ri + 80, rows.length); rj++) {
-        const cells = rows[rj];
-        const fl    = cells[0]?.label || '';
-        if (stopRe.test(fl)) break;
-        const rawName = cells[0]?.raw;
-        if (!rawName || typeof rawName !== 'string') continue;
-        const nm = rawName.trim();
-        if (!nm || nm.length < 2) continue;
-        if (/^(TOTAL|CLASIF|OK\s*$)/i.test(nm)) continue;
-        for (let j = 1; j < cells.length; j++) {
-          const v = cells[j].raw;
-          if (v != null && v !== '') {
-            const n = parseARS(v);
-            if (n > 100) { rubros[nm] = n; break; }
+  const RUBROS_CANONICOS = new Set([
+    'CARNES','FIAMBRES','COMESTIBLES','VERDURAS','BEBIDAS','PANIFICACION',
+    'POLLO','LACTEOS','LIMPIEZA','KIOSCO','CERDO','ROTISERIA',
+    'PERFUMERIA','FRESCOS','CONGELADOS','VARIOS','DESCARTABLES'
+  ]);
+  const rubroSrcName = wb.SheetNames.find(n => /^ECONOMICO$/i.test(n)) ||
+                       wb.SheetNames.find(n => /^ESTADOS$/i.test(n));
+  if (rubroSrcName && sheetRows[rubroSrcName]) {
+    for (const cells of sheetRows[rubroSrcName]) {
+      const lbl = cells[0]?.label || '';
+      if (!RUBROS_CANONICOS.has(lbl)) continue;
+      const nm = String(cells[0].raw).trim();
+      for (let j = 1; j < cells.length; j++) {
+        const v = cells[j].raw;
+        if (v != null && v !== '') { const n = parseARS(v); if (n > 100) { rubros[nm] = n; break; } }
+      }
+    }
+  }
+  // Fallback: búsqueda por encabezado CLASIF DE VENTAS POR RUBROS (formatos sin ECONOMICO/ESTADOS)
+  if (!Object.keys(rubros).length) {
+    const stopRe = /FORMAS DE COBROS|TOTAL EGRESOS|EGRESOS POR RUBROS|TOTAL COBROS|FINANCIERO/;
+    outer: for (const rows of Object.values(sheetRows)) {
+      for (let ri = 0; ri < rows.length; ri++) {
+        if (!/CLASIF.*VENTAS.*RUBROS/.test(rows[ri][0]?.label || '')) continue;
+        for (let rj = ri + 1; rj < Math.min(ri + 80, rows.length); rj++) {
+          const cells = rows[rj];
+          const fl    = cells[0]?.label || '';
+          if (stopRe.test(fl)) break;
+          const rawName = cells[0]?.raw;
+          if (!rawName || typeof rawName !== 'string') continue;
+          const nm = rawName.trim();
+          if (!nm || nm.length < 2) continue;
+          if (/^(TOTAL|CLASIF|OK\s*$)/i.test(nm)) continue;
+          for (let j = 1; j < cells.length; j++) {
+            const v = cells[j].raw;
+            if (v != null && v !== '') {
+              const n = parseARS(v);
+              if (n > 100) { rubros[nm] = n; break; }
+            }
           }
         }
+        break outer;
       }
-      break outer;
     }
   }
 
@@ -873,14 +1064,14 @@ function renderFilterBar() {
 // ═══════════════════════════════════════════════════════════════
 function renderKPIs() {
   const sum  = arr => arr.reduce((a, b) => a + b, 0);
-  const fmtM = v => '$' + (v / 1_000_000).toFixed(1) + 'M';
+  const fmtM = fmtARS;
 
   const totalVentas  = sum(D.ingresos);
   const totalEgresos = sum(D.egresos);
   const totalResult  = sum(D.resultado);
   const avgVentas    = totalVentas  / D.meses.length;
   const avgEgresos   = totalEgresos / D.meses.length;
-  const avgMargen    = totalVentas > 0 ? (totalResult / totalVentas * 100).toFixed(1) : '0';
+  const avgMargen    = totalVentas > 0 ? fmtPct(totalResult / totalVentas * 100) : '0,00%';
   const n            = D.meses.length;
 
   const bestIdx    = D.resultado.indexOf(Math.max(...D.resultado));
@@ -902,7 +1093,7 @@ function renderKPIs() {
     <div class="kpi-card green">
       <div class="kpi-label">Resultado Acumulado</div>
       <div class="kpi-value green">${fmtM(totalResult)}</div>
-      <div class="kpi-sub">Margen promedio: ${avgMargen}%</div>
+      <div class="kpi-sub">Margen promedio: ${avgMargen}</div>
     </div>
     <div class="kpi-card yellow">
       <div class="kpi-label">Mejor Mes</div>
@@ -915,7 +1106,7 @@ function renderKPIs() {
 // RENDER: Tabla resumen mensual
 // ═══════════════════════════════════════════════════════════════
 function renderTableResumen() {
-  const fmt = v => '$' + new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(v));
+  const fmt = fmtARS;
   const sum = arr => arr.reduce((a, b) => a + b, 0);
 
   const buildRow = (label, arr, cls = '', bold = false) => {
@@ -944,12 +1135,12 @@ function renderTableResumen() {
   const resCells    = D.resultado.map(v => `<td class="${v >= 0 ? 'positive' : 'negative'}">${fmt(v)}</td>`).join('');
   html += `<tr class="result-row"><td><strong>Resultado Económico</strong></td>${resCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${fmt(totalResult)}</strong></td></tr>`;
 
-  const totalMargen = sum(D.ingresos) > 0 ? (totalResult / sum(D.ingresos) * 100).toFixed(1) : 0;
+  const totalMargen = sum(D.ingresos) > 0 ? fmtPct(totalResult / sum(D.ingresos) * 100) : '0,00%';
   const margenCells = D.resultado.map((r, i) => {
-    const m = D.ingresos[i] > 0 ? (r / D.ingresos[i] * 100).toFixed(1) : '0.0';
-    return `<td class="${r >= 0 ? 'positive' : 'negative'}">${m}%</td>`;
+    const m = D.ingresos[i] > 0 ? fmtPct(r / D.ingresos[i] * 100) : '0,00%';
+    return `<td class="${r >= 0 ? 'positive' : 'negative'}">${m}</td>`;
   }).join('');
-  html += `<tr class="result-row"><td>Margen Neto</td>${margenCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${totalMargen}%</strong></td></tr>`;
+  html += `<tr class="result-row"><td>Margen Neto</td>${margenCells}<td class="${totalResult >= 0 ? 'positive' : 'negative'}"><strong>${totalMargen}</strong></td></tr>`;
 
   html += '</tbody></table>';
   document.getElementById('tableResumen').innerHTML = html;
@@ -965,14 +1156,14 @@ function renderTableRubros() {
     return;
   }
 
-  const fmt  = v => '$' + new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(Math.round(v));
+  const fmt  = fmtARS;
   const sumI = D.ingresos.reduce((a, b) => a + b, 0);
 
   const rubrosSorted = Object.entries(D.rubros)
     .sort(([, a], [, b]) => b - a)
     .map(([rubro, total]) => ({
       rubro, total,
-      pct: sumI > 0 ? Math.round(total / sumI * 100) : 0
+      pct: sumI > 0 ? fmtPct(total / sumI * 100) : '0,00%'
     }));
 
   const firstMes = D.meses[0], lastMes = D.meses[D.meses.length - 1];
@@ -988,7 +1179,7 @@ function renderTableRubros() {
       const v = m[rubro] || 0;
       html += `<td>${v > 0 ? fmt(v) : '—'}</td>`;
     });
-    html += `<td>${pct}%</td></tr>`;
+    html += `<td>${pct}</td></tr>`;
   });
 
   html += '</tbody></table>';
@@ -1002,9 +1193,21 @@ function renderCharts() {
   Object.values(_charts).forEach(c => { if (c) c.destroy(); });
   _charts = {};
 
-  const fmt       = v => '$' + (v / 1_000_000).toFixed(1) + 'M';
-  const gridColor = 'rgba(255,255,255,0.06)';
-  const tickColor = '#64748b';
+  const fmt        = fmtARS;
+  const gridColor  = 'rgba(255,255,255,0.06)';
+  const tickColor  = 'rgba(232,234,236,0.42)';
+  const legendColor = 'rgba(232,234,236,0.8)';
+
+  const ciafCat = [
+    '#1E4A82',  // brand      — Costo Ventas
+    '#F26522',  // accent     — Sueldos
+    '#2D6CB8',  // brand-2    — Servicios
+    '#E74C3C',  // negative   — G. Bancarios
+    '#16A085',  // teal       — Gastos Empresa
+    '#8E44AD',  // purple     — G. Posnet
+    '#F39C12',  // amber      — G. Mercado Pago
+    '#C0392B',  // dark-red   — Impuestos
+  ];
 
   // ── Chart 1: Evolución Ventas / Egresos / Resultado ──────────
   _charts.evol = new Chart(document.getElementById('chartEvolucion'), {
@@ -1012,25 +1215,25 @@ function renderCharts() {
     data: {
       labels: D.meses,
       datasets: [
-        { label: 'Total Ingresos', data: D.ingresos, backgroundColor: 'rgba(59,130,246,0.7)', borderColor: '#3b82f6', borderWidth: 1, order: 2 },
-        { label: 'Total Egresos',  data: D.egresos,  backgroundColor: 'rgba(239,68,68,0.6)',  borderColor: '#ef4444', borderWidth: 1, order: 3 },
-        { label: 'Resultado Económico', data: D.resultado, type: 'line', borderColor: '#22c55e',
-          backgroundColor: 'rgba(34,197,94,0.15)', borderWidth: 2.5, pointBackgroundColor: '#22c55e',
+        { label: 'Total Ingresos', data: D.ingresos,  backgroundColor: 'rgba(45,108,184,0.70)', borderColor: '#2D6CB8', borderWidth: 1, order: 2 },
+        { label: 'Total Egresos',  data: D.egresos,   backgroundColor: 'rgba(231,76,60,0.60)',  borderColor: '#E74C3C', borderWidth: 1, order: 3 },
+        { label: 'Resultado Económico', data: D.resultado, type: 'line', borderColor: '#2ECC71',
+          backgroundColor: 'rgba(46,204,113,0.12)', borderWidth: 2.5, pointBackgroundColor: '#2ECC71',
           pointRadius: 5, pointHoverRadius: 7, fill: false, tension: 0.3, yAxisID: 'yResult', order: 1 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#cbd5e1', padding: 16, font: { size: 12 } } },
+        legend: { labels: { color: legendColor, padding: 16, font: { size: 12, family: 'Open Sans' } } },
         tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
       },
       scales: {
-        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
-        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor },
-             title: { display: true, text: 'Ingresos / Egresos', color: tickColor } },
-        yResult: { position: 'right', ticks: { color: '#4ade80', callback: v => fmt(v) },
-                   grid: { drawOnChartArea: false }, title: { display: true, text: 'Resultado', color: '#4ade80' } }
+        x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor },
+             title: { display: true, text: 'Ingresos / Egresos', color: tickColor, font: { family: 'Open Sans' } } },
+        yResult: { position: 'right', ticks: { color: '#2ECC71', callback: v => fmt(v), font: { family: 'JetBrains Mono' } },
+                   grid: { drawOnChartArea: false }, title: { display: true, text: 'Resultado', color: '#2ECC71', font: { family: 'Open Sans' } } }
       }
     }
   });
@@ -1042,8 +1245,8 @@ function renderCharts() {
       labels: D.meses,
       datasets: [{
         label: 'Resultado Económico', data: D.resultado,
-        backgroundColor: D.resultado.map(v => v >= 0 ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.75)'),
-        borderColor:     D.resultado.map(v => v >= 0 ? '#22c55e' : '#ef4444'),
+        backgroundColor: D.resultado.map(v => v >= 0 ? 'rgba(46,204,113,0.75)' : 'rgba(231,76,60,0.75)'),
+        borderColor:     D.resultado.map(v => v >= 0 ? '#2ECC71' : '#E74C3C'),
         borderWidth: 1.5, borderRadius: 5
       }]
     },
@@ -1051,8 +1254,8 @@ function renderCharts() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmt(ctx.raw)}` } } },
       scales: {
-        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
-        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+        x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
       }
     }
   });
@@ -1069,18 +1272,17 @@ function renderCharts() {
       labels: ['Costo Ventas', 'Sueldos', 'Servicios', 'G. Bancarios', 'Gastos Empresa', 'G. Posnet', 'G. Mercado Pago', 'Impuestos'],
       datasets: [{
         data: promedios,
-        backgroundColor: ['#3b82f6','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#10b981','#f97316','#ec4899'],
-        borderColor: '#1e293b', borderWidth: 2
+        backgroundColor: ciafCat,
+        borderColor: '#132239', borderWidth: 2
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '62%',
       plugins: {
-        legend: { position: 'right', labels: { color: '#cbd5e1', padding: 10, font: { size: 11 }, boxWidth: 12 } },
+        legend: { position: 'right', labels: { color: legendColor, padding: 10, font: { size: 11, family: 'Open Sans' }, boxWidth: 12 } },
         tooltip: { callbacks: { label: ctx => {
           const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-          const pct   = (ctx.raw / total * 100).toFixed(1);
-          return ` ${ctx.label}: ${fmt(ctx.raw)} (${pct}%)`;
+          return ` ${ctx.label}: ${fmt(ctx.raw)} (${fmtPct(ctx.raw / total * 100)})`;
         }}}
       }
     }
@@ -1093,17 +1295,17 @@ function renderCharts() {
     data: {
       labels: D.meses,
       datasets: [
-        { label: 'Compra de Mercadería', data: D.compras, backgroundColor: 'rgba(251,191,36,0.75)',
-          borderColor: '#f59e0b', borderWidth: 1.5, borderRadius: 5, order: 2 },
-        { label: 'Costo de Reposición', data: D.costoVentas, type: 'line', borderColor: '#ef4444',
-          backgroundColor: 'rgba(239,68,68,0.1)', borderWidth: 2.5, pointBackgroundColor: '#ef4444',
+        { label: 'Compra de Mercadería', data: D.compras, backgroundColor: 'rgba(242,101,34,0.72)',
+          borderColor: '#F26522', borderWidth: 1.5, borderRadius: 5, order: 2 },
+        { label: 'Costo de Reposición', data: D.costoVentas, type: 'line', borderColor: '#E74C3C',
+          backgroundColor: 'rgba(231,76,60,0.10)', borderWidth: 2.5, pointBackgroundColor: '#E74C3C',
           pointRadius: 5, fill: false, tension: 0.3, order: 1 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#cbd5e1', padding: 16, font: { size: 12 } } },
+        legend: { labels: { color: legendColor, padding: 16, font: { size: 12, family: 'Open Sans' } } },
         tooltip: {
           mode: 'index', intersect: false,
           callbacks: {
@@ -1118,12 +1320,12 @@ function renderCharts() {
         subtitle: {
           display: true,
           text: `Total acumulado compras: ${fmt(totalCompras)}  |  Promedio mensual: ${fmt(totalCompras / D.meses.length)}`,
-          color: '#94a3b8', font: { size: 11 }, padding: { bottom: 10 }
+          color: 'rgba(232,234,236,0.42)', font: { size: 11, family: 'Open Sans' }, padding: { bottom: 10 }
         }
       },
       scales: {
-        x: { ticks: { color: tickColor }, grid: { color: gridColor } },
-        y: { ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+        x: { ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
       }
     }
   });
@@ -1134,25 +1336,25 @@ function renderCharts() {
     data: {
       labels: D.meses,
       datasets: [
-        { label: 'Costo Ventas',    data: D.costoVentas,   backgroundColor: '#3b82f6', stack: 'stack' },
-        { label: 'Sueldos',         data: D.sueldos,        backgroundColor: '#f59e0b', stack: 'stack' },
-        { label: 'Servicios',       data: D.servicios,      backgroundColor: '#8b5cf6', stack: 'stack' },
-        { label: 'G. Bancarios',    data: D.bancarios,      backgroundColor: '#ef4444', stack: 'stack' },
-        { label: 'Gastos Empresa',  data: D.gastosEmpresa,  backgroundColor: '#06b6d4', stack: 'stack' },
-        { label: 'G. Posnet',       data: D.posnet,         backgroundColor: '#10b981', stack: 'stack' },
-        { label: 'G. Mercado Pago', data: D.mercadopago,    backgroundColor: '#f97316', stack: 'stack' },
-        { label: 'Impuestos',       data: D.impuestos,      backgroundColor: '#ec4899', stack: 'stack' },
+        { label: 'Costo Ventas',    data: D.costoVentas,   backgroundColor: ciafCat[0], stack: 'stack' },
+        { label: 'Sueldos',         data: D.sueldos,        backgroundColor: ciafCat[1], stack: 'stack' },
+        { label: 'Servicios',       data: D.servicios,      backgroundColor: ciafCat[2], stack: 'stack' },
+        { label: 'G. Bancarios',    data: D.bancarios,      backgroundColor: ciafCat[3], stack: 'stack' },
+        { label: 'Gastos Empresa',  data: D.gastosEmpresa,  backgroundColor: ciafCat[4], stack: 'stack' },
+        { label: 'G. Posnet',       data: D.posnet,         backgroundColor: ciafCat[5], stack: 'stack' },
+        { label: 'G. Mercado Pago', data: D.mercadopago,    backgroundColor: ciafCat[6], stack: 'stack' },
+        { label: 'Impuestos',       data: D.impuestos,      backgroundColor: ciafCat[7], stack: 'stack' },
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#cbd5e1', padding: 12, font: { size: 11 }, boxWidth: 12 } },
+        legend: { labels: { color: legendColor, padding: 12, font: { size: 11, family: 'Open Sans' }, boxWidth: 12 } },
         tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.raw)}` } }
       },
       scales: {
-        x: { stacked: true, ticks: { color: tickColor }, grid: { color: gridColor } },
-        y: { stacked: true, ticks: { color: tickColor, callback: v => fmt(v) }, grid: { color: gridColor } }
+        x: { stacked: true, ticks: { color: tickColor, font: { family: 'Open Sans' } }, grid: { color: gridColor } },
+        y: { stacked: true, ticks: { color: tickColor, callback: v => fmt(v), font: { family: 'JetBrains Mono' } }, grid: { color: gridColor } }
       }
     }
   });
