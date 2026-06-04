@@ -82,6 +82,35 @@ body {
 .pill:hover { border-color: var(--brand-2); color: rgba(232,234,236,.85); }
 .pill.active { background: rgba(45,108,184,.2); border-color: var(--brand-2); color: rgba(232,234,236,.95); font-weight: 600; }
 
+/* Slider de rango (doble extremo) */
+.range-group { flex: 1; min-width: 300px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.range-readout {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+  color: rgba(232,234,236,.9); display: flex; align-items: center; gap: 8px; white-space: nowrap;
+}
+.range-readout .range-arrow { color: var(--brand-2); }
+.range-slider { position: relative; flex: 1; min-width: 200px; height: 28px; }
+.range-track, .range-fill {
+  position: absolute; top: 50%; transform: translateY(-50%); height: 4px; border-radius: 2px;
+}
+.range-track { left: 0; right: 0; background: rgba(255,255,255,.12); }
+.range-fill { background: var(--brand-2); }
+.range-slider input[type=range] {
+  position: absolute; top: 0; left: 0; width: 100%; height: 28px; margin: 0;
+  -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none;
+}
+.range-slider input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; pointer-events: auto;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--brand-2);
+  border: 2px solid var(--surface-2); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+.range-slider input[type=range]::-moz-range-thumb {
+  pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--brand-2); border: 2px solid var(--surface-2); cursor: pointer;
+}
+.range-slider input[type=range]::-webkit-slider-runnable-track { background: transparent; border: none; }
+.range-slider input[type=range]::-moz-range-track { background: transparent; border: none; }
+
 .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
 
 /* KPI Cards */
@@ -271,14 +300,18 @@ footer { text-align: center; padding: 20px; color: rgba(232,234,236,.25); font-s
 
 <!-- Barra de filtros -->
 <div id="filterBar" class="filter-bar">
-  <div class="filter-group">
-    <span class="filter-label">Año</span>
-    <div id="yearPills" class="filter-pills"></div>
-  </div>
-  <div class="filter-sep"></div>
-  <div class="filter-group">
-    <span class="filter-label">Mes</span>
-    <div id="monthPills" class="filter-pills"></div>
+  <div class="filter-group range-group">
+    <span class="filter-label">Rango</span>
+    <div class="range-readout">
+      <span id="rangeFrom">—</span><span class="range-arrow">→</span><span id="rangeTo">—</span>
+    </div>
+    <div id="rangeSlider" class="range-slider">
+      <div class="range-track"></div>
+      <div id="rangeFill" class="range-fill"></div>
+      <input type="range" id="rangeMin" min="0" max="0" value="0" step="1" aria-label="Mes inicial">
+      <input type="range" id="rangeMax" min="0" max="0" value="0" step="1" aria-label="Mes final">
+    </div>
+    <button id="rangeReset" class="pill">Todos</button>
   </div>
 </div>
 
@@ -429,8 +462,9 @@ async function fetchWithRetry(url, { retries = 4, baseDelay = 800 } = {}) {
 // Dataset completo (todos los meses cargados)
 let D = {};
 
-// Estado de filtros: year=null → todos; months=null → todos
-let FILTER = { year: null, months: null };
+// Estado de filtros: rango de meses sobre la línea de tiempo cronológica de D.raw.
+// startIdx/endIdx = índices (0..n-1) en D.raw ya ordenado; null → rango completo.
+let FILTER = { startIdx: null, endIdx: null };
 
 // Instancias de charts (para destroy antes de recrear)
 let _charts = {};
@@ -1010,8 +1044,8 @@ async function loadAllMonths() {
   D.years = [...new Set(results.map(r => r.year))].sort();
 
   // Resetear filtros al recargar
-  FILTER.year   = null;
-  FILTER.months = null;
+  FILTER.startIdx = null;
+  FILTER.endIdx   = null;
 
   // Poblar D a partir del raw completo
   _populateD(results);
@@ -1056,87 +1090,69 @@ function _populateD(rows) {
 function applyFilter() {
   if (!D.raw) return;
 
-  let rows = D.raw;
-  if (FILTER.year !== null)   rows = rows.filter(r => r.year  === FILTER.year);
-  if (FILTER.months !== null) rows = rows.filter(r => FILTER.months.has(r.month));
-  if (!rows.length) rows = D.raw; // fallback: nada seleccionado → mostrar todo
+  const n = D.raw.length;
+  let s = FILTER.startIdx ?? 0;
+  let e = FILTER.endIdx ?? (n - 1);
+  if (s > e) [s, e] = [e, s];               // por las dudas
+  let rows = D.raw.slice(s, e + 1);          // D.raw está ordenado cronológicamente
+  if (!rows.length) rows = D.raw;            // fallback
 
   _populateD(rows);
   renderAll();
-}
-
-function setYearFilter(year) {
-  FILTER.year   = year;
-  FILTER.months = null; // resetear mes al cambiar año
-  applyFilter();
-}
-
-function toggleMonthFilter(m) {
-  // Universo de meses disponibles para el año actual
-  const base = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
-  const allM  = new Set(base.map(r => r.month));
-
-  if (FILTER.months === null) {
-    // Todos activos → desactivar todos menos este
-    FILTER.months = new Set([m]);
-  } else {
-    if (FILTER.months.has(m)) {
-      FILTER.months.delete(m);
-      if (FILTER.months.size === 0) FILTER.months = null; // si queda vacío → todos
-    } else {
-      FILTER.months.add(m);
-      if (FILTER.months.size === allM.size) FILTER.months = null; // si están todos → null
-    }
-  }
-  applyFilter();
 }
 
 // ═══════════════════════════════════════════════════════════════
 // RENDER: barra de filtros
 // ═══════════════════════════════════════════════════════════════
 function renderFilterBar() {
-  if (!D.raw || !D.raw.length) {
-    document.getElementById('filterBar').style.display = 'none';
-    return;
-  }
-  document.getElementById('filterBar').style.display = 'flex';
+  const bar = document.getElementById('filterBar');
+  if (!D.raw || !D.raw.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
 
-  // ── Pills de año ─────────────────────────────────────────────
-  const yearCont = document.getElementById('yearPills');
-  yearCont.innerHTML = '';
+  const n      = D.raw.length;
+  const minEl  = document.getElementById('rangeMin');
+  const maxEl  = document.getElementById('rangeMax');
+  const fillEl = document.getElementById('rangeFill');
+  const fromEl = document.getElementById('rangeFrom');
+  const toEl   = document.getElementById('rangeTo');
 
-  const mkYearBtn = (label, value) => {
-    const b = document.createElement('button');
-    b.className = 'pill' + (FILTER.year === value ? ' active' : '');
-    b.textContent = label;
-    b.onclick = () => setYearFilter(value);
-    return b;
+  // Etiqueta cronológica de cada período (D.raw ya viene ordenado).
+  const periodLabel = i => D.raw[i]?.label || '—';
+
+  // Sincronizar límites y valores del slider con el estado actual.
+  const s = FILTER.startIdx ?? 0;
+  const e = FILTER.endIdx ?? (n - 1);
+  minEl.min = maxEl.min = '0';
+  minEl.max = maxEl.max = String(n - 1);
+  minEl.value = String(s);
+  maxEl.value = String(e);
+  // Un solo mes disponible: deshabilitar interacción.
+  minEl.disabled = maxEl.disabled = (n <= 1);
+
+  // Refresca etiquetas y relleno; si commit=true, aplica el filtro.
+  const update = (commit) => {
+    let a = +minEl.value, b = +maxEl.value;
+    if (a > b) [a, b] = [b, a];
+    fromEl.textContent = periodLabel(a);
+    toEl.textContent   = periodLabel(b);
+    const pct = x => n > 1 ? (x / (n - 1)) * 100 : 0;
+    fillEl.style.left  = pct(a) + '%';
+    fillEl.style.right = (100 - pct(b)) + '%';
+    if (commit) { FILTER.startIdx = a; FILTER.endIdx = b; applyFilter(); }
   };
-  yearCont.appendChild(mkYearBtn('Todos', null));
-  D.years.forEach(y => yearCont.appendChild(mkYearBtn(String(y), y)));
 
-  // ── Pills de mes ─────────────────────────────────────────────
-  const base      = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
-  const monthNums = [...new Set(base.map(r => r.month))].sort((a, b) => a - b);
+  // Empuje mutuo de los extremos para que no se crucen.
+  minEl.oninput = () => { if (+minEl.value > +maxEl.value) maxEl.value = minEl.value; update(false); };
+  maxEl.oninput = () => { if (+maxEl.value < +minEl.value) minEl.value = maxEl.value; update(false); };
+  // Aplicar el filtro al soltar (change), no en cada movimiento.
+  minEl.onchange = maxEl.onchange = () => update(true);
 
-  const monthCont = document.getElementById('monthPills');
-  monthCont.innerHTML = '';
+  document.getElementById('rangeReset').onclick = () => {
+    minEl.value = '0'; maxEl.value = String(n - 1);
+    update(true);
+  };
 
-  // "Todos" reset
-  const allMBtn = document.createElement('button');
-  allMBtn.className = 'pill' + (FILTER.months === null ? ' active' : '');
-  allMBtn.textContent = 'Todos';
-  allMBtn.onclick = () => { FILTER.months = null; applyFilter(); };
-  monthCont.appendChild(allMBtn);
-
-  monthNums.forEach(m => {
-    const b = document.createElement('button');
-    const active = FILTER.months === null || FILTER.months.has(m);
-    b.className = 'pill' + (active ? ' active' : '');
-    b.textContent = MES_ABREV_LABELS[m - 1];
-    b.onclick = () => toggleMonthFilter(m);
-    monthCont.appendChild(b);
-  });
+  update(false);
 }
 
 // ═══════════════════════════════════════════════════════════════
