@@ -401,7 +401,7 @@ let CONFIG = {
 // ═══════════════════════════════════════════════════════════════
 // CACHÉ en localStorage (invalidada por modifiedTime)
 // ═══════════════════════════════════════════════════════════════
-const CACHE_KEY = 'donamerico_cache_v2';
+const CACHE_KEY = 'donamerico_cache_v4';
 function cacheGet() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) { return {}; }
 }
@@ -806,8 +806,32 @@ function parseMonthlySummary(wb) {
       if (lbl && lbl.length > 1 && raw != null && raw !== '') dsMap[lbl] = raw;
     }
   }
-  console.log('[Parser] DATA STUDIO sheet:', dsSheetName, '| Keys:', Object.keys(dsMap));
-  // ds: devuelve parseARS(valor) o null si la clave no existe en DATA STUDIO
+  // ── ECONOMICO: bloque resumen canónico (col A = label, col B = valor) ─────────
+  // Formatos 2025 (y algunos sin hoja DATA STUDIO) traen el resumen devengado en un
+  // bloque cuyo header es exactamente "ECONOMICO". Mismas claves que DATA STUDIO.
+  // Se usa como fallback: DATA STUDIO mantiene precedencia (relleno sólo lo faltante).
+  const ecoMap = {};
+  for (const rows of Object.values(sheetRows)) {
+    let inEco = false, seen = 0;
+    for (const cells of rows) {
+      if (!inEco) { if (cells.some(c => c.label === 'ECONOMICO')) inEco = true; continue; }
+      if (seen++ > 25) break; // el bloque tiene ~16 filas; cota de seguridad
+      const lbl = cells[0]?.label;
+      if (!lbl || lbl.length < 2) continue;
+      for (let j = 1; j < cells.length; j++) {
+        const raw = cells[j]?.raw;
+        if (raw != null && raw !== '') { if (!(lbl in ecoMap)) ecoMap[lbl] = raw; break; }
+      }
+    }
+  }
+  // Fusionar con precedencia de DATA STUDIO (sólo claves faltantes).
+  // NOTA: se EXCLUYE 'RESULTADO ECONOMICO' del bloque ECONOMICO porque puede estar
+  // desactualizado (JUNIO 2025: -4.056.020,15) y no cuadra con Ventas − Total Egresos.
+  // Al no inyectarlo, `resultado` cae a findSigned (bloque de detalle: -3.656.807,05),
+  // que sí es consistente con Total Egresos y el Margen Neto de la tabla.
+  for (const k in ecoMap) { if (k !== 'RESULTADO ECONOMICO' && !(k in dsMap)) dsMap[k] = ecoMap[k]; }
+  console.log('[Parser] DATA STUDIO sheet:', dsSheetName, '| ECONOMICO keys:', Object.keys(ecoMap), '| Keys:', Object.keys(dsMap));
+  // ds: devuelve parseARS(valor) o null si la clave no existe en DATA STUDIO/ECONOMICO
   const ds    = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseARS(v); } return null; };
   const dsSgn = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseRaw(v);  } return null; };
 
@@ -816,7 +840,8 @@ function parseMonthlySummary(wb) {
   const costoVentas   = ds('COSTO DE VENTAS') ?? findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
   // Costo de Reposición: fila propia bajo el bloque COSTO DE VENTAS (≠ Costo de Ventas).
   // Labels normalizados sin tilde ([:label]), por eso el patrón va sin acento.
-  const costoReposicion = ds('COSTO DE REPOSICION') ?? (findVal([/^COSTO DE REPOSICION$/]) || costoVentas);
+  // Acepta "COSTO DE REPOSICION" y la variante "ESTIMADO COSTO DE REPOSICION" (JULIO 2025).
+  const costoReposicion = ds('COSTO DE REPOSICION') ?? (findVal([/COSTO DE REPOSICION$/]) || costoVentas);
   const gastosEmpresa = ds('GASTOS') ?? findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
 
   // Impuestos: DATA STUDIO tiene el valor real (0 en ENE/MAR/ABR = carga trimestral en FEB).
