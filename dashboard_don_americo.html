@@ -82,34 +82,16 @@ body {
 .pill:hover { border-color: var(--brand-2); color: rgba(232,234,236,.85); }
 .pill.active { background: rgba(45,108,184,.2); border-color: var(--brand-2); color: rgba(232,234,236,.95); font-weight: 600; }
 
-/* Slider de rango (doble extremo) */
-.range-group { flex: 1; min-width: 300px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.range-readout {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
-  color: rgba(232,234,236,.9); display: flex; align-items: center; gap: 8px; white-space: nowrap;
+/* Selección múltiple de meses (comparar meses sueltos) */
+.period-groups { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.period-year { display: flex; align-items: center; gap: 7px; }
+.period-year .year-tag {
+  font-family: 'Montserrat', sans-serif; font-size: 0.6rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; color: rgba(232,234,236,.32);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap;
 }
-.range-readout .range-arrow { color: var(--brand-2); }
-.range-slider { position: relative; flex: 1; min-width: 200px; height: 28px; }
-.range-track, .range-fill {
-  position: absolute; top: 50%; transform: translateY(-50%); height: 4px; border-radius: 2px;
-}
-.range-track { left: 0; right: 0; background: rgba(255,255,255,.12); }
-.range-fill { background: var(--brand-2); }
-.range-slider input[type=range] {
-  position: absolute; top: 0; left: 0; width: 100%; height: 28px; margin: 0;
-  -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none;
-}
-.range-slider input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; pointer-events: auto;
-  width: 16px; height: 16px; border-radius: 50%; background: var(--brand-2);
-  border: 2px solid var(--surface-2); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.5);
-}
-.range-slider input[type=range]::-moz-range-thumb {
-  pointer-events: auto; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--brand-2); border: 2px solid var(--surface-2); cursor: pointer;
-}
-.range-slider input[type=range]::-webkit-slider-runnable-track { background: transparent; border: none; }
-.range-slider input[type=range]::-moz-range-track { background: transparent; border: none; }
+.period-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.filter-hint { font-family: 'Open Sans', sans-serif; font-size: 0.62rem; color: rgba(232,234,236,.3); white-space: nowrap; }
 
 .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
 
@@ -300,19 +282,12 @@ footer { text-align: center; padding: 20px; color: rgba(232,234,236,.25); font-s
 
 <!-- Barra de filtros -->
 <div id="filterBar" class="filter-bar">
-  <div class="filter-group range-group">
-    <span class="filter-label">Rango</span>
-    <div class="range-readout">
-      <span id="rangeFrom">—</span><span class="range-arrow">→</span><span id="rangeTo">—</span>
-    </div>
-    <div id="rangeSlider" class="range-slider">
-      <div class="range-track"></div>
-      <div id="rangeFill" class="range-fill"></div>
-      <input type="range" id="rangeMin" min="0" max="0" value="0" step="1" aria-label="Mes inicial">
-      <input type="range" id="rangeMax" min="0" max="0" value="0" step="1" aria-label="Mes final">
-    </div>
-    <button id="rangeReset" class="pill">Todos</button>
+  <div class="filter-group">
+    <span class="filter-label">Meses</span>
+    <button id="allMonths" class="pill">Todos</button>
   </div>
+  <div id="periodGroups" class="period-groups"></div>
+  <span class="filter-hint">Clic para elegir/comparar · Shift+clic = rango</span>
 </div>
 
 <div class="container">
@@ -462,9 +437,10 @@ async function fetchWithRetry(url, { retries = 4, baseDelay = 800 } = {}) {
 // Dataset completo (todos los meses cargados)
 let D = {};
 
-// Estado de filtros: rango de meses sobre la línea de tiempo cronológica de D.raw.
-// startIdx/endIdx = índices (0..n-1) en D.raw ya ordenado; null → rango completo.
-let FILTER = { startIdx: null, endIdx: null };
+// Estado de filtros: selección múltiple de meses (permite comparar meses sueltos).
+// selected = Set de índices en D.raw (cronológico); null → todos los meses.
+let FILTER = { selected: null };
+let _rangeAnchor = null; // ancla para Shift+clic (rango contiguo)
 
 // Instancias de charts (para destroy antes de recrear)
 let _charts = {};
@@ -1044,8 +1020,8 @@ async function loadAllMonths() {
   D.years = [...new Set(results.map(r => r.year))].sort();
 
   // Resetear filtros al recargar
-  FILTER.startIdx = null;
-  FILTER.endIdx   = null;
+  FILTER.selected = null;
+  _rangeAnchor    = null;
 
   // Poblar D a partir del raw completo
   _populateD(results);
@@ -1090,15 +1066,36 @@ function _populateD(rows) {
 function applyFilter() {
   if (!D.raw) return;
 
-  const n = D.raw.length;
-  let s = FILTER.startIdx ?? 0;
-  let e = FILTER.endIdx ?? (n - 1);
-  if (s > e) [s, e] = [e, s];               // por las dudas
-  let rows = D.raw.slice(s, e + 1);          // D.raw está ordenado cronológicamente
-  if (!rows.length) rows = D.raw;            // fallback
+  let rows = (FILTER.selected && FILTER.selected.size)
+    ? D.raw.filter((r, i) => FILTER.selected.has(i))  // D.raw ordenado → comparación cronológica
+    : D.raw;
+  if (!rows.length) rows = D.raw;                       // fallback
 
   _populateD(rows);
   renderAll();
+}
+
+// Toggle de un mes (por índice cronológico). Shift+clic = rango contiguo desde el ancla.
+function togglePeriod(i, shift) {
+  const total = D.raw.length;
+  if (shift && _rangeAnchor !== null) {
+    const lo = Math.min(_rangeAnchor, i), hi = Math.max(_rangeAnchor, i);
+    if (FILTER.selected === null) FILTER.selected = new Set();
+    for (let k = lo; k <= hi; k++) FILTER.selected.add(k);
+  } else if (FILTER.selected === null) {
+    FILTER.selected = new Set([i]);          // de "Todos" → sólo este
+    _rangeAnchor = i;
+  } else if (FILTER.selected.has(i)) {
+    FILTER.selected.delete(i);
+    if (FILTER.selected.size === 0) FILTER.selected = null;
+    _rangeAnchor = i;
+  } else {
+    FILTER.selected.add(i);
+    _rangeAnchor = i;
+  }
+  // Si quedaron todos seleccionados → equivalente a "Todos".
+  if (FILTER.selected && FILTER.selected.size === total) FILTER.selected = null;
+  applyFilter();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1109,50 +1106,37 @@ function renderFilterBar() {
   if (!D.raw || !D.raw.length) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
 
-  const n      = D.raw.length;
-  const minEl  = document.getElementById('rangeMin');
-  const maxEl  = document.getElementById('rangeMax');
-  const fillEl = document.getElementById('rangeFill');
-  const fromEl = document.getElementById('rangeFrom');
-  const toEl   = document.getElementById('rangeTo');
+  // Botón "Todos"
+  const allBtn = document.getElementById('allMonths');
+  allBtn.className = 'pill' + (FILTER.selected === null ? ' active' : '');
+  allBtn.onclick = () => { FILTER.selected = null; _rangeAnchor = null; applyFilter(); };
 
-  // Etiqueta cronológica de cada período (D.raw ya viene ordenado).
-  const periodLabel = i => D.raw[i]?.label || '—';
+  // Chips de meses agrupados por año (cada chip = un período concreto de D.raw)
+  const cont = document.getElementById('periodGroups');
+  cont.innerHTML = '';
+  D.years.forEach(y => {
+    const grp = document.createElement('div');
+    grp.className = 'period-year';
+    const tag = document.createElement('span');
+    tag.className = 'year-tag';
+    tag.textContent = String(y);
+    grp.appendChild(tag);
 
-  // Sincronizar límites y valores del slider con el estado actual.
-  const s = FILTER.startIdx ?? 0;
-  const e = FILTER.endIdx ?? (n - 1);
-  minEl.min = maxEl.min = '0';
-  minEl.max = maxEl.max = String(n - 1);
-  minEl.value = String(s);
-  maxEl.value = String(e);
-  // Un solo mes disponible: deshabilitar interacción.
-  minEl.disabled = maxEl.disabled = (n <= 1);
-
-  // Refresca etiquetas y relleno; si commit=true, aplica el filtro.
-  const update = (commit) => {
-    let a = +minEl.value, b = +maxEl.value;
-    if (a > b) [a, b] = [b, a];
-    fromEl.textContent = periodLabel(a);
-    toEl.textContent   = periodLabel(b);
-    const pct = x => n > 1 ? (x / (n - 1)) * 100 : 0;
-    fillEl.style.left  = pct(a) + '%';
-    fillEl.style.right = (100 - pct(b)) + '%';
-    if (commit) { FILTER.startIdx = a; FILTER.endIdx = b; applyFilter(); }
-  };
-
-  // Empuje mutuo de los extremos para que no se crucen.
-  minEl.oninput = () => { if (+minEl.value > +maxEl.value) maxEl.value = minEl.value; update(false); };
-  maxEl.oninput = () => { if (+maxEl.value < +minEl.value) minEl.value = maxEl.value; update(false); };
-  // Aplicar el filtro al soltar (change), no en cada movimiento.
-  minEl.onchange = maxEl.onchange = () => update(true);
-
-  document.getElementById('rangeReset').onclick = () => {
-    minEl.value = '0'; maxEl.value = String(n - 1);
-    update(true);
-  };
-
-  update(false);
+    const chips = document.createElement('div');
+    chips.className = 'period-chips';
+    D.raw.forEach((r, i) => {
+      if (r.year !== y) return;
+      const b = document.createElement('button');
+      const active = FILTER.selected === null || FILTER.selected.has(i);
+      b.className = 'pill' + (active ? ' active' : '');
+      b.textContent = MES_ABREV_LABELS[r.month - 1];
+      b.title = r.label;
+      b.onclick = (ev) => togglePeriod(i, ev.shiftKey);
+      chips.appendChild(b);
+    });
+    grp.appendChild(chips);
+    cont.appendChild(grp);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
