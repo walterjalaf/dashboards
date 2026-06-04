@@ -1033,12 +1033,17 @@ function _populateD(rows) {
   D.mercadopago   = rows.map(r => r.mercadopago);
   D.posnet        = rows.map(r => r.posnet);
   D.sueldos       = rows.map(r => r.sueldos);
-  D.resultado     = rows.map(r => r.resultado);
   D.compras       = rows.map(r => r.compras);
   D.egresos       = rows.map(r =>
     r.costoVentas + r.gastosEmpresa + r.impuestos + r.servicios +
     r.bancarios   + r.mercadopago   + r.posnet    + r.sueldos
   );
+  // Resultado = Ventas − Total Egresos (los 8 componentes mostrados). Se CALCULA en vez
+  // de leer "RESULTADO ECONOMICO" del archivo: ese valor puede estar desactualizado
+  // (JUNIO 2025: -4.056.020,15 vs -3.656.807,05 real) y dejaría el Resultado/Margen
+  // descuadrado respecto al Total Egresos de la tabla. Coincide con el resultado
+  // declarado en los meses consistentes (ej. ENERO 2026).
+  D.resultado     = rows.map((r, i) => D.ingresos[i] - D.egresos[i]);
   const allRubros = {};
   rows.forEach(r => Object.entries(r.rubros).forEach(([k, v]) => { allRubros[k] = (allRubros[k] || 0) + v; }));
   D.rubros         = allRubros;
