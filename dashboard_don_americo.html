@@ -401,7 +401,7 @@ let CONFIG = {
 // ═══════════════════════════════════════════════════════════════
 // CACHÉ en localStorage (invalidada por modifiedTime)
 // ═══════════════════════════════════════════════════════════════
-const CACHE_KEY = 'donamerico_cache_v1';
+const CACHE_KEY = 'donamerico_cache_v2';
 function cacheGet() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) { return {}; }
 }
@@ -814,6 +814,9 @@ function parseMonthlySummary(wb) {
   // ── KPIs: DATA STUDIO primero → fallback a búsqueda genérica ──────────────────
   const ingresos      = ds('VENTAS') ?? findVal([/^ECONOMICO VENTAS$/, /^TOTAL INGRESOS$/, /^VENTAS$/]);
   const costoVentas   = ds('COSTO DE VENTAS') ?? findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
+  // Costo de Reposición: fila propia bajo el bloque COSTO DE VENTAS (≠ Costo de Ventas).
+  // Labels normalizados sin tilde ([:label]), por eso el patrón va sin acento.
+  const costoReposicion = ds('COSTO DE REPOSICION') ?? (findVal([/^COSTO DE REPOSICION$/]) || costoVentas);
   const gastosEmpresa = ds('GASTOS') ?? findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
 
   // Impuestos: DATA STUDIO tiene el valor real (0 en ENE/MAR/ABR = carga trimestral en FEB).
@@ -830,8 +833,10 @@ function parseMonthlySummary(wb) {
   const resultado     = dsSgn('RESULTADO ECONOMICO') ?? findSigned([/^RESULTADO ECONOMICO$/]);
 
   // ── Compras: DATA STUDIO B17 = total compra mensual de mercadería ─────────────
-  let compras = ds('COMPRAS');
-  if (compras === null) {
+  // Compra de Mercadería (devengado): fila COMPRA DE MERCADERIA. Si no aparece,
+  // se cae al bloque de fallback difuso de abajo.
+  let compras = ds('COMPRAS') ?? findVal([/^COMPRA DE MERCADERIA$/]);
+  if (!compras) {
     compras = costoVentas;
     const found = [];
     for (const cells of allRows) {
@@ -920,8 +925,8 @@ function parseMonthlySummary(wb) {
     }
   }
 
-  console.log('[Parser] Valores extraídos:', { ingresos, costoVentas, gastosEmpresa, impuestos, servicios, bancarios, mercadopago, posnet, sueldos, resultado, compras });
-  return { ingresos, costoVentas, gastosEmpresa, impuestos, servicios,
+  console.log('[Parser] Valores extraídos:', { ingresos, costoVentas, costoReposicion, gastosEmpresa, impuestos, servicios, bancarios, mercadopago, posnet, sueldos, resultado, compras });
+  return { ingresos, costoVentas, costoReposicion, gastosEmpresa, impuestos, servicios,
            bancarios, mercadopago, posnet, sueldos, resultado, compras, rubros };
 }
 
@@ -995,6 +1000,7 @@ function _populateD(rows) {
   D.meses         = rows.map(r => r.label);
   D.ingresos      = rows.map(r => r.ingresos);
   D.costoVentas   = rows.map(r => r.costoVentas);
+  D.costoReposicion = rows.map(r => r.costoReposicion);
   D.gastosEmpresa = rows.map(r => r.gastosEmpresa);
   D.impuestos     = rows.map(r => r.impuestos);
   D.servicios     = rows.map(r => r.servicios);
@@ -1341,7 +1347,7 @@ function renderCharts() {
       datasets: [
         { label: 'Compra de Mercadería', data: D.compras, backgroundColor: 'rgba(242,101,34,0.72)',
           borderColor: '#F26522', borderWidth: 1.5, borderRadius: 5, order: 2 },
-        { label: 'Costo de Reposición', data: D.costoVentas, type: 'line', borderColor: '#E74C3C',
+        { label: 'Costo de Reposición', data: D.costoReposicion, type: 'line', borderColor: '#E74C3C',
           backgroundColor: 'rgba(231,76,60,0.10)', borderWidth: 2.5, pointBackgroundColor: '#E74C3C',
           pointRadius: 5, fill: false, tension: 0.3, order: 1 }
       ]
@@ -1357,7 +1363,7 @@ function renderCharts() {
             afterBody: items => {
               const c = items.find(i => i.datasetIndex === 0);
               const s = items.find(i => i.datasetIndex === 1);
-              if (c && s) return [``, ` Diferencia (compra − costo): ${fmt(c.raw - s.raw)}`];
+              if (c && s) return [``, ` Diferencia (compra − reposición): ${fmt(c.raw - s.raw)}`];
             }
           }
         },
