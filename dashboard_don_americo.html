@@ -82,6 +82,17 @@ body {
 .pill:hover { border-color: var(--brand-2); color: rgba(232,234,236,.85); }
 .pill.active { background: rgba(45,108,184,.2); border-color: var(--brand-2); color: rgba(232,234,236,.95); font-weight: 600; }
 
+/* Selección múltiple de meses (comparar meses sueltos) */
+.period-groups { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.period-year { display: flex; align-items: center; gap: 7px; }
+.period-year .year-tag {
+  font-family: 'Montserrat', sans-serif; font-size: 0.6rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; color: rgba(232,234,236,.32);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap;
+}
+.period-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.filter-hint { font-family: 'Open Sans', sans-serif; font-size: 0.62rem; color: rgba(232,234,236,.3); white-space: nowrap; }
+
 .container { padding: 28px 36px; max-width: 1600px; margin: 0 auto; }
 
 /* KPI Cards */
@@ -272,14 +283,11 @@ footer { text-align: center; padding: 20px; color: rgba(232,234,236,.25); font-s
 <!-- Barra de filtros -->
 <div id="filterBar" class="filter-bar">
   <div class="filter-group">
-    <span class="filter-label">Año</span>
-    <div id="yearPills" class="filter-pills"></div>
+    <span class="filter-label">Meses</span>
+    <button id="allMonths" class="pill">Todos</button>
   </div>
-  <div class="filter-sep"></div>
-  <div class="filter-group">
-    <span class="filter-label">Mes</span>
-    <div id="monthPills" class="filter-pills"></div>
-  </div>
+  <div id="periodGroups" class="period-groups"></div>
+  <span class="filter-hint">Clic para elegir/comparar · Shift+clic = rango</span>
 </div>
 
 <div class="container">
@@ -401,7 +409,7 @@ let CONFIG = {
 // ═══════════════════════════════════════════════════════════════
 // CACHÉ en localStorage (invalidada por modifiedTime)
 // ═══════════════════════════════════════════════════════════════
-const CACHE_KEY = 'donamerico_cache_v1';
+const CACHE_KEY = 'donamerico_cache_v4';
 function cacheGet() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch(e) { return {}; }
 }
@@ -429,8 +437,10 @@ async function fetchWithRetry(url, { retries = 4, baseDelay = 800 } = {}) {
 // Dataset completo (todos los meses cargados)
 let D = {};
 
-// Estado de filtros: year=null → todos; months=null → todos
-let FILTER = { year: null, months: null };
+// Estado de filtros: selección múltiple de meses (permite comparar meses sueltos).
+// selected = Set de índices en D.raw (cronológico); null → todos los meses.
+let FILTER = { selected: null };
+let _rangeAnchor = null; // ancla para Shift+clic (rango contiguo)
 
 // Instancias de charts (para destroy antes de recrear)
 let _charts = {};
@@ -806,14 +816,42 @@ function parseMonthlySummary(wb) {
       if (lbl && lbl.length > 1 && raw != null && raw !== '') dsMap[lbl] = raw;
     }
   }
-  console.log('[Parser] DATA STUDIO sheet:', dsSheetName, '| Keys:', Object.keys(dsMap));
-  // ds: devuelve parseARS(valor) o null si la clave no existe en DATA STUDIO
+  // ── ECONOMICO: bloque resumen canónico (col A = label, col B = valor) ─────────
+  // Formatos 2025 (y algunos sin hoja DATA STUDIO) traen el resumen devengado en un
+  // bloque cuyo header es exactamente "ECONOMICO". Mismas claves que DATA STUDIO.
+  // Se usa como fallback: DATA STUDIO mantiene precedencia (relleno sólo lo faltante).
+  const ecoMap = {};
+  for (const rows of Object.values(sheetRows)) {
+    let inEco = false, seen = 0;
+    for (const cells of rows) {
+      if (!inEco) { if (cells.some(c => c.label === 'ECONOMICO')) inEco = true; continue; }
+      if (seen++ > 25) break; // el bloque tiene ~16 filas; cota de seguridad
+      const lbl = cells[0]?.label;
+      if (!lbl || lbl.length < 2) continue;
+      for (let j = 1; j < cells.length; j++) {
+        const raw = cells[j]?.raw;
+        if (raw != null && raw !== '') { if (!(lbl in ecoMap)) ecoMap[lbl] = raw; break; }
+      }
+    }
+  }
+  // Fusionar con precedencia de DATA STUDIO (sólo claves faltantes).
+  // NOTA: se EXCLUYE 'RESULTADO ECONOMICO' del bloque ECONOMICO porque puede estar
+  // desactualizado (JUNIO 2025: -4.056.020,15) y no cuadra con Ventas − Total Egresos.
+  // Al no inyectarlo, `resultado` cae a findSigned (bloque de detalle: -3.656.807,05),
+  // que sí es consistente con Total Egresos y el Margen Neto de la tabla.
+  for (const k in ecoMap) { if (k !== 'RESULTADO ECONOMICO' && !(k in dsMap)) dsMap[k] = ecoMap[k]; }
+  console.log('[Parser] DATA STUDIO sheet:', dsSheetName, '| ECONOMICO keys:', Object.keys(ecoMap), '| Keys:', Object.keys(dsMap));
+  // ds: devuelve parseARS(valor) o null si la clave no existe en DATA STUDIO/ECONOMICO
   const ds    = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseARS(v); } return null; };
   const dsSgn = (...ks) => { for (const k of ks) { const v = dsMap[k]; if (v != null) return parseRaw(v);  } return null; };
 
   // ── KPIs: DATA STUDIO primero → fallback a búsqueda genérica ──────────────────
   const ingresos      = ds('VENTAS') ?? findVal([/^ECONOMICO VENTAS$/, /^TOTAL INGRESOS$/, /^VENTAS$/]);
   const costoVentas   = ds('COSTO DE VENTAS') ?? findVal([/^COSTO DE VENTAS$/, /^1\) COSTO DE VENTAS$/]);
+  // Costo de Reposición: fila propia bajo el bloque COSTO DE VENTAS (≠ Costo de Ventas).
+  // Labels normalizados sin tilde ([:label]), por eso el patrón va sin acento.
+  // Acepta "COSTO DE REPOSICION" y la variante "ESTIMADO COSTO DE REPOSICION" (JULIO 2025).
+  const costoReposicion = ds('COSTO DE REPOSICION') ?? (findVal([/COSTO DE REPOSICION$/]) || costoVentas);
   const gastosEmpresa = ds('GASTOS') ?? findVal([/^GASTOS$/, /^GASTOS DE LA EMPRESA$/, /^2\) GASTOS DE LA EMPRESA$/, /^GASTOS DE EMPRESA$/]);
 
   // Impuestos: DATA STUDIO tiene el valor real (0 en ENE/MAR/ABR = carga trimestral en FEB).
@@ -830,8 +868,10 @@ function parseMonthlySummary(wb) {
   const resultado     = dsSgn('RESULTADO ECONOMICO') ?? findSigned([/^RESULTADO ECONOMICO$/]);
 
   // ── Compras: DATA STUDIO B17 = total compra mensual de mercadería ─────────────
-  let compras = ds('COMPRAS');
-  if (compras === null) {
+  // Compra de Mercadería (devengado): fila COMPRA DE MERCADERIA. Si no aparece,
+  // se cae al bloque de fallback difuso de abajo.
+  let compras = ds('COMPRAS') ?? findVal([/^COMPRA DE MERCADERIA$/]);
+  if (!compras) {
     compras = costoVentas;
     const found = [];
     for (const cells of allRows) {
@@ -920,8 +960,8 @@ function parseMonthlySummary(wb) {
     }
   }
 
-  console.log('[Parser] Valores extraídos:', { ingresos, costoVentas, gastosEmpresa, impuestos, servicios, bancarios, mercadopago, posnet, sueldos, resultado, compras });
-  return { ingresos, costoVentas, gastosEmpresa, impuestos, servicios,
+  console.log('[Parser] Valores extraídos:', { ingresos, costoVentas, costoReposicion, gastosEmpresa, impuestos, servicios, bancarios, mercadopago, posnet, sueldos, resultado, compras });
+  return { ingresos, costoVentas, costoReposicion, gastosEmpresa, impuestos, servicios,
            bancarios, mercadopago, posnet, sueldos, resultado, compras, rubros };
 }
 
@@ -980,8 +1020,8 @@ async function loadAllMonths() {
   D.years = [...new Set(results.map(r => r.year))].sort();
 
   // Resetear filtros al recargar
-  FILTER.year   = null;
-  FILTER.months = null;
+  FILTER.selected = null;
+  _rangeAnchor    = null;
 
   // Poblar D a partir del raw completo
   _populateD(results);
@@ -995,6 +1035,7 @@ function _populateD(rows) {
   D.meses         = rows.map(r => r.label);
   D.ingresos      = rows.map(r => r.ingresos);
   D.costoVentas   = rows.map(r => r.costoVentas);
+  D.costoReposicion = rows.map(r => r.costoReposicion);
   D.gastosEmpresa = rows.map(r => r.gastosEmpresa);
   D.impuestos     = rows.map(r => r.impuestos);
   D.servicios     = rows.map(r => r.servicios);
@@ -1002,12 +1043,17 @@ function _populateD(rows) {
   D.mercadopago   = rows.map(r => r.mercadopago);
   D.posnet        = rows.map(r => r.posnet);
   D.sueldos       = rows.map(r => r.sueldos);
-  D.resultado     = rows.map(r => r.resultado);
   D.compras       = rows.map(r => r.compras);
   D.egresos       = rows.map(r =>
     r.costoVentas + r.gastosEmpresa + r.impuestos + r.servicios +
     r.bancarios   + r.mercadopago   + r.posnet    + r.sueldos
   );
+  // Resultado = Ventas − Total Egresos (los 8 componentes mostrados). Se CALCULA en vez
+  // de leer "RESULTADO ECONOMICO" del archivo: ese valor puede estar desactualizado
+  // (JUNIO 2025: -4.056.020,15 vs -3.656.807,05 real) y dejaría el Resultado/Margen
+  // descuadrado respecto al Total Egresos de la tabla. Coincide con el resultado
+  // declarado en los meses consistentes (ej. ENERO 2026).
+  D.resultado     = rows.map((r, i) => D.ingresos[i] - D.egresos[i]);
   const allRubros = {};
   rows.forEach(r => Object.entries(r.rubros).forEach(([k, v]) => { allRubros[k] = (allRubros[k] || 0) + v; }));
   D.rubros         = allRubros;
@@ -1020,38 +1066,35 @@ function _populateD(rows) {
 function applyFilter() {
   if (!D.raw) return;
 
-  let rows = D.raw;
-  if (FILTER.year !== null)   rows = rows.filter(r => r.year  === FILTER.year);
-  if (FILTER.months !== null) rows = rows.filter(r => FILTER.months.has(r.month));
-  if (!rows.length) rows = D.raw; // fallback: nada seleccionado → mostrar todo
+  let rows = (FILTER.selected && FILTER.selected.size)
+    ? D.raw.filter((r, i) => FILTER.selected.has(i))  // D.raw ordenado → comparación cronológica
+    : D.raw;
+  if (!rows.length) rows = D.raw;                       // fallback
 
   _populateD(rows);
   renderAll();
 }
 
-function setYearFilter(year) {
-  FILTER.year   = year;
-  FILTER.months = null; // resetear mes al cambiar año
-  applyFilter();
-}
-
-function toggleMonthFilter(m) {
-  // Universo de meses disponibles para el año actual
-  const base = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
-  const allM  = new Set(base.map(r => r.month));
-
-  if (FILTER.months === null) {
-    // Todos activos → desactivar todos menos este
-    FILTER.months = new Set([m]);
+// Toggle de un mes (por índice cronológico). Shift+clic = rango contiguo desde el ancla.
+function togglePeriod(i, shift) {
+  const total = D.raw.length;
+  if (shift && _rangeAnchor !== null) {
+    const lo = Math.min(_rangeAnchor, i), hi = Math.max(_rangeAnchor, i);
+    if (FILTER.selected === null) FILTER.selected = new Set();
+    for (let k = lo; k <= hi; k++) FILTER.selected.add(k);
+  } else if (FILTER.selected === null) {
+    FILTER.selected = new Set([i]);          // de "Todos" → sólo este
+    _rangeAnchor = i;
+  } else if (FILTER.selected.has(i)) {
+    FILTER.selected.delete(i);
+    if (FILTER.selected.size === 0) FILTER.selected = null;
+    _rangeAnchor = i;
   } else {
-    if (FILTER.months.has(m)) {
-      FILTER.months.delete(m);
-      if (FILTER.months.size === 0) FILTER.months = null; // si queda vacío → todos
-    } else {
-      FILTER.months.add(m);
-      if (FILTER.months.size === allM.size) FILTER.months = null; // si están todos → null
-    }
+    FILTER.selected.add(i);
+    _rangeAnchor = i;
   }
+  // Si quedaron todos seleccionados → equivalente a "Todos".
+  if (FILTER.selected && FILTER.selected.size === total) FILTER.selected = null;
   applyFilter();
 }
 
@@ -1059,47 +1102,40 @@ function toggleMonthFilter(m) {
 // RENDER: barra de filtros
 // ═══════════════════════════════════════════════════════════════
 function renderFilterBar() {
-  if (!D.raw || !D.raw.length) {
-    document.getElementById('filterBar').style.display = 'none';
-    return;
-  }
-  document.getElementById('filterBar').style.display = 'flex';
+  const bar = document.getElementById('filterBar');
+  if (!D.raw || !D.raw.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
 
-  // ── Pills de año ─────────────────────────────────────────────
-  const yearCont = document.getElementById('yearPills');
-  yearCont.innerHTML = '';
+  // Botón "Todos"
+  const allBtn = document.getElementById('allMonths');
+  allBtn.className = 'pill' + (FILTER.selected === null ? ' active' : '');
+  allBtn.onclick = () => { FILTER.selected = null; _rangeAnchor = null; applyFilter(); };
 
-  const mkYearBtn = (label, value) => {
-    const b = document.createElement('button');
-    b.className = 'pill' + (FILTER.year === value ? ' active' : '');
-    b.textContent = label;
-    b.onclick = () => setYearFilter(value);
-    return b;
-  };
-  yearCont.appendChild(mkYearBtn('Todos', null));
-  D.years.forEach(y => yearCont.appendChild(mkYearBtn(String(y), y)));
+  // Chips de meses agrupados por año (cada chip = un período concreto de D.raw)
+  const cont = document.getElementById('periodGroups');
+  cont.innerHTML = '';
+  D.years.forEach(y => {
+    const grp = document.createElement('div');
+    grp.className = 'period-year';
+    const tag = document.createElement('span');
+    tag.className = 'year-tag';
+    tag.textContent = String(y);
+    grp.appendChild(tag);
 
-  // ── Pills de mes ─────────────────────────────────────────────
-  const base      = FILTER.year !== null ? D.raw.filter(r => r.year === FILTER.year) : D.raw;
-  const monthNums = [...new Set(base.map(r => r.month))].sort((a, b) => a - b);
-
-  const monthCont = document.getElementById('monthPills');
-  monthCont.innerHTML = '';
-
-  // "Todos" reset
-  const allMBtn = document.createElement('button');
-  allMBtn.className = 'pill' + (FILTER.months === null ? ' active' : '');
-  allMBtn.textContent = 'Todos';
-  allMBtn.onclick = () => { FILTER.months = null; applyFilter(); };
-  monthCont.appendChild(allMBtn);
-
-  monthNums.forEach(m => {
-    const b = document.createElement('button');
-    const active = FILTER.months === null || FILTER.months.has(m);
-    b.className = 'pill' + (active ? ' active' : '');
-    b.textContent = MES_ABREV_LABELS[m - 1];
-    b.onclick = () => toggleMonthFilter(m);
-    monthCont.appendChild(b);
+    const chips = document.createElement('div');
+    chips.className = 'period-chips';
+    D.raw.forEach((r, i) => {
+      if (r.year !== y) return;
+      const b = document.createElement('button');
+      const active = FILTER.selected === null || FILTER.selected.has(i);
+      b.className = 'pill' + (active ? ' active' : '');
+      b.textContent = MES_ABREV_LABELS[r.month - 1];
+      b.title = r.label;
+      b.onclick = (ev) => togglePeriod(i, ev.shiftKey);
+      chips.appendChild(b);
+    });
+    grp.appendChild(chips);
+    cont.appendChild(grp);
   });
 }
 
@@ -1341,7 +1377,7 @@ function renderCharts() {
       datasets: [
         { label: 'Compra de Mercadería', data: D.compras, backgroundColor: 'rgba(242,101,34,0.72)',
           borderColor: '#F26522', borderWidth: 1.5, borderRadius: 5, order: 2 },
-        { label: 'Costo de Reposición', data: D.costoVentas, type: 'line', borderColor: '#E74C3C',
+        { label: 'Costo de Reposición', data: D.costoReposicion, type: 'line', borderColor: '#E74C3C',
           backgroundColor: 'rgba(231,76,60,0.10)', borderWidth: 2.5, pointBackgroundColor: '#E74C3C',
           pointRadius: 5, fill: false, tension: 0.3, order: 1 }
       ]
@@ -1357,7 +1393,7 @@ function renderCharts() {
             afterBody: items => {
               const c = items.find(i => i.datasetIndex === 0);
               const s = items.find(i => i.datasetIndex === 1);
-              if (c && s) return [``, ` Diferencia (compra − costo): ${fmt(c.raw - s.raw)}`];
+              if (c && s) return [``, ` Diferencia (compra − reposición): ${fmt(c.raw - s.raw)}`];
             }
           }
         },
