@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox
 import pandas as pd
 import unicodedata
 import re
+import traceback
 from io import StringIO
 
 
@@ -60,6 +61,19 @@ def _format_fecha(val) -> str:
         return pd.to_datetime(val).strftime("%d/%m/%Y")
     except Exception:
         return str(val)
+
+
+def _format_fecha_arg(val) -> str:
+    """Como _format_fecha pero con dayfirst=True para fechas en texto DD/MM/YYYY o DD-MM-YYYY."""
+    if pd.isna(val):
+        return ""
+    s = str(val).strip()
+    if not s or s.lower() == "nan":
+        return ""
+    try:
+        return pd.to_datetime(s, dayfirst=True).strftime("%d/%m/%Y")
+    except Exception:
+        return s
 
 
 def _find_col(df: pd.DataFrame, *keywords) -> str | None:
@@ -271,6 +285,7 @@ def _normalize_san_juan(df: pd.DataFrame):
 
     df = df.copy()
     df["_monto"] = df[col_monto].apply(_to_float)
+    df["_fecha"] = df[col_fecha].apply(_format_fecha)
     df = df.dropna(subset=["_monto"]).reset_index(drop=True)
 
     mask_eg = df["_monto"] < 0
@@ -279,7 +294,7 @@ def _normalize_san_juan(df: pd.DataFrame):
     eg = df[mask_eg].reset_index(drop=True)
     df_eg = pd.DataFrame({
         "BANCO":    "SAN JUAN",
-        "FECHA":    eg[col_fecha],
+        "FECHA":    eg["_fecha"],
         "DATA 1":   eg[col_concepto] if col_concepto else "",
         "DATA 2":   "",
         "TOTAL":    eg["_monto"].abs(),
@@ -293,7 +308,7 @@ def _normalize_san_juan(df: pd.DataFrame):
     ing = df[mask_in].reset_index(drop=True)
     df_in = pd.DataFrame({
         "BANCO":    "SAN JUAN",
-        "FECHA":    ing[col_fecha],
+        "FECHA":    ing["_fecha"],
         "DATA 1":   ing[col_concepto] if col_concepto else "",
         "DATA 2":   "",
         "TOTAL":    ing["_monto"],
@@ -360,25 +375,16 @@ def _normalize_icbc(df: pd.DataFrame):
     col_fecha    = _find_col(df, "fecha_contable", "fecha")
     col_debito   = _find_col(df, "debito")
     col_credito  = _find_col(df, "credito")
-    col_concepto = _find_col(df, "concepto", "descripcion", "detalle")
+    col_concepto = ("concepto" if "concepto" in df.columns
+                    else _find_col(df, "descripcion", "detalle", "concepto"))
 
     if not col_fecha:
         raise ValueError("ICBC: columna 'Fecha contable' no encontrada.")
     if not col_debito:
         raise ValueError("ICBC: columna 'Debito en $' no encontrada.")
 
-    def _parse(val):
-        if pd.isna(val) or str(val).strip() == "":
-            return None
-        s = str(val).strip().replace(".", "").replace(",", ".")
-        try:
-            return float(s)
-        except ValueError:
-            return None
-
-    df = df.copy()
-    df["_debito"]  = df[col_debito].apply(_parse)
-    df["_credito"] = df[col_credito].apply(_parse) if col_credito else 0
+    df["_debito"]  = df[col_debito].apply(_parse_arg_number)
+    df["_credito"] = df[col_credito].apply(_parse_arg_number) if col_credito else 0
 
     # débitos: filas con valor en columna debito (abs para TOTAL)
     mask_eg = df["_debito"].notna() & (df["_debito"] != 0)
@@ -406,6 +412,249 @@ def _normalize_icbc(df: pd.DataFrame):
         "DATA 1":   ing[col_concepto] if col_concepto else "",
         "DATA 2":   "",
         "TOTAL":    ing["_credito"].abs(),
+        "INGRESOS": "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "ORIGEN":   "",
+    }).reset_index(drop=True)
+
+    return df_eg, df_in
+
+
+# ─── MERCADO PAGO ─────────────────────────────────────────────────────────────
+
+def _load_mercado_pago(filepath: str) -> pd.DataFrame:
+    ext = filepath.rsplit(".", 1)[-1].lower()
+    if ext in ("xlsx", "xls"):
+        engine = "xlrd" if ext == "xls" else None
+        df = pd.read_excel(filepath, dtype=str, engine=engine)
+    elif ext == "csv":
+        for sep in (",", ";", "\t"):
+            try:
+                df = pd.read_csv(filepath, sep=sep, dtype=str, encoding="utf-8")
+                if len(df.columns) > 2:
+                    break
+            except Exception:
+                continue
+    else:
+        raise ValueError(f"Mercado Pago: formato no soportado .{ext}")
+
+    df.columns = [_norm_colname(c) for c in df.columns]
+    return df.dropna(how="all")
+
+
+def _normalize_mercado_pago(df: pd.DataFrame):
+    col_fecha   = _find_col(df, "release_date")
+    col_debito  = _find_col(df, "net_debit_amount")
+    col_credito = _find_col(df, "net_credit_amount")
+    col_source  = _find_col(df, "source_id")
+    col_record  = _find_col(df, "record_type")
+    col_desc    = _find_col(df, "description")
+
+    if not col_fecha:
+        raise ValueError("Mercado Pago: columna 'RELEASE_DATE' no encontrada.")
+    if not col_debito:
+        raise ValueError("Mercado Pago: columna 'NET_DEBIT_AMOUNT' no encontrada.")
+    if not col_credito:
+        raise ValueError("Mercado Pago: columna 'NET_CREDIT_AMOUNT' no encontrada.")
+
+    df = df.copy()
+    df["_debito"]  = df[col_debito].apply(_to_float)
+    df["_credito"] = df[col_credito].apply(_to_float)
+    df["_fecha"]   = df[col_fecha].apply(_format_fecha)
+
+    mask_eg = df["_debito"].notna() & (df["_debito"] > 0)
+    mask_in = df["_credito"].notna() & (df["_credito"] > 0) & ~mask_eg
+    if col_desc:
+        mask_eg = mask_eg & ~df[col_desc].str.strip().str.lower().str.contains(r"reserve_for_payout|reserve_for_payment", na=False)
+    if col_record:
+        mask_in = mask_in & ~df[col_record].str.strip().str.lower().isin(["initial_available_balance", "total"])
+    if col_desc:
+        mask_in = mask_in & ~df[col_desc].str.strip().str.lower().str.contains(r"reserve_for_payout|reserve_for_payment", na=False)
+
+    eg = df[mask_eg].reset_index(drop=True)
+    df_eg = pd.DataFrame({
+        "BANCO":    "MERCADO PAGO",
+        "FECHA":    eg["_fecha"],
+        "DATA 1":   eg[col_source] if col_source else "",
+        "DATA 2":   eg[col_record] if col_record else "",
+        "TOTAL":    eg["_debito"],
+        "EGRESOS":  "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "PAGO":     "",
+        "OBSERVAC": "",
+    }).reset_index(drop=True)
+
+    ing = df[mask_in].reset_index(drop=True)
+    df_in = pd.DataFrame({
+        "BANCO":    "MERCADO PAGO",
+        "FECHA":    ing["_fecha"],
+        "DATA 1":   ing[col_source] if col_source else "",
+        "DATA 2":   ing[col_record] if col_record else "",
+        "TOTAL":    ing["_credito"],
+        "INGRESOS": "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "ORIGEN":   "",
+    }).reset_index(drop=True)
+
+    return df_eg, df_in
+
+
+# ─── BANCO FRANCES ───────────────────────────────────────────────────────────
+
+def _load_frances(filepath: str) -> pd.DataFrame:
+    """
+    .xls real (Excel 97). Tiene 6 filas de metadata antes del header.
+    Busca la fila con 'fecha' + 'credito'/'debito' como encabezado.
+    """
+    ext = filepath.rsplit(".", 1)[-1].lower()
+    engine = "xlrd" if ext == "xls" else None
+
+    df_raw = pd.read_excel(filepath, header=None, dtype=str, engine=engine)
+
+    for i, row in df_raw.iterrows():
+        cols = [_norm_colname(str(v)) for v in row.values]
+        if "fecha" in cols and any("debito" in c or "credito" in c for c in cols):
+            df_raw.columns = [_norm_colname(str(v)) for v in df_raw.iloc[i].values]
+            df = df_raw.iloc[i + 1:].copy().reset_index(drop=True)
+            return df.dropna(how="all")
+
+    raise ValueError("Banco Francés: no se encontró fila de encabezados con 'Fecha' y 'Crédito'/'Débito'.")
+
+
+def _normalize_frances(df: pd.DataFrame):
+    col_fecha    = _find_col(df, "fecha")
+    col_credito  = _find_col(df, "credito")
+    col_debito   = _find_col(df, "debito")
+    col_concepto = _find_col(df, "concepto", "descripcion")
+    col_detalle  = _find_col(df, "detalle")
+
+    if not col_fecha:
+        raise ValueError("Banco Francés: columna 'Fecha' no encontrada.")
+    if not col_debito and not col_credito:
+        raise ValueError("Banco Francés: columnas 'Crédito'/'Débito' no encontradas.")
+
+    df = df.copy()
+    df["_credito"] = df[col_credito].apply(_to_float) if col_credito else None
+    df["_debito"]  = df[col_debito].apply(_to_float)  if col_debito  else None
+    df["_fecha"]   = df[col_fecha].apply(_format_fecha_arg)
+
+    # Débito viene con valores negativos → egresos
+    mask_eg = df["_debito"].notna() & (df["_debito"] < 0) if col_debito else pd.Series(False, index=df.index)
+    # Crédito viene con valores positivos → ingresos
+    mask_in = df["_credito"].notna() & (df["_credito"] > 0) if col_credito else pd.Series(False, index=df.index)
+
+    eg = df[mask_eg].reset_index(drop=True)
+    df_eg = pd.DataFrame({
+        "BANCO":    "FRANCES",
+        "FECHA":    eg["_fecha"],
+        "DATA 1":   eg[col_concepto] if col_concepto else "",
+        "DATA 2":   eg[col_detalle]  if col_detalle  else "",
+        "TOTAL":    eg["_debito"].abs(),
+        "EGRESOS":  "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "PAGO":     "",
+        "OBSERVAC": "",
+    }).reset_index(drop=True)
+
+    ing = df[mask_in].reset_index(drop=True)
+    df_in = pd.DataFrame({
+        "BANCO":    "FRANCES",
+        "FECHA":    ing["_fecha"],
+        "DATA 1":   ing[col_concepto] if col_concepto else "",
+        "DATA 2":   ing[col_detalle]  if col_detalle  else "",
+        "TOTAL":    ing["_credito"],
+        "INGRESOS": "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "ORIGEN":   "",
+    }).reset_index(drop=True)
+
+    return df_eg, df_in
+
+
+# ─── SUPERVIELLE ─────────────────────────────────────────────────────────────
+
+def _load_supervielle(filepath: str) -> pd.DataFrame:
+    """
+    .xlsx con header en la primera fila.
+    Las celdas vacías en columnas numéricas aparecen como 5e-324 al leer
+    con openpyxl — se filtran en la normalización con un umbral mínimo.
+    """
+    ext = filepath.rsplit(".", 1)[-1].lower()
+    if ext in ("xlsx", "xls"):
+        engine = "xlrd" if ext == "xls" else None
+        df_raw = pd.read_excel(filepath, header=None, dtype=str, engine=engine)
+    elif ext == "csv":
+        for sep in (",", ";", "\t"):
+            try:
+                df_raw = pd.read_csv(filepath, sep=sep, dtype=str, encoding="latin-1", header=None)
+                if len(df_raw.columns) > 2:
+                    break
+            except Exception:
+                continue
+        else:
+            raise ValueError("Supervielle: no se pudo leer el archivo CSV.")
+    else:
+        raise ValueError(f"Supervielle: formato no soportado .{ext}")
+
+    for i, row in df_raw.iterrows():
+        cols = [_norm_colname(str(v)) for v in row.values]
+        if "fecha" in cols and any("debito" in c for c in cols):
+            df_raw.columns = [_norm_colname(str(v)) for v in df_raw.iloc[i].values]
+            df = df_raw.iloc[i + 1:].copy().reset_index(drop=True)
+            return df.dropna(how="all")
+
+    raise ValueError("Supervielle: no se encontró fila de encabezados con 'Fecha' y 'Débito'.")
+
+
+def _normalize_supervielle(df: pd.DataFrame):
+    col_fecha    = _find_col(df, "fecha")
+    col_debito   = _find_col(df, "debito")
+    col_credito  = _find_col(df, "credito")
+    col_concepto = _find_col(df, "concepto")
+    col_detalle  = _find_col(df, "detalle")
+
+    if not col_fecha:
+        raise ValueError("Supervielle: columna 'Fecha' no encontrada.")
+    if not col_debito:
+        raise ValueError("Supervielle: columna 'Débito' no encontrada.")
+
+    df = df.copy()
+    df["_debito"]  = df[col_debito].apply(_to_float)
+    df["_credito"] = df[col_credito].apply(_to_float) if col_credito else None
+    df["_fecha"]   = df[col_fecha].apply(_format_fecha_arg)
+
+    # openpyxl lee celdas vacías como 5e-324; umbral 0.01 filtra ese ruido
+    MIN_VAL = 0.01
+    mask_eg = df["_debito"].notna() & (df["_debito"] > MIN_VAL)
+    mask_in = (df["_credito"].notna() & (df["_credito"] > MIN_VAL)
+               if col_credito else pd.Series(False, index=df.index))
+
+    eg = df[mask_eg].reset_index(drop=True)
+    df_eg = pd.DataFrame({
+        "BANCO":    "SUPERVIELLE",
+        "FECHA":    eg["_fecha"],
+        "DATA 1":   eg[col_concepto] if col_concepto else "",
+        "DATA 2":   eg[col_detalle]  if col_detalle  else "",
+        "TOTAL":    eg["_debito"],
+        "EGRESOS":  "",
+        "RUBRO":    "",
+        "SUBRUBRO": "",
+        "PAGO":     "",
+        "OBSERVAC": "",
+    }).reset_index(drop=True)
+
+    ing = df[mask_in].reset_index(drop=True)
+    df_in = pd.DataFrame({
+        "BANCO":    "SUPERVIELLE",
+        "FECHA":    ing["_fecha"],
+        "DATA 1":   ing[col_concepto] if col_concepto else "",
+        "DATA 2":   ing[col_detalle]  if col_detalle  else "",
+        "TOTAL":    ing["_credito"],
         "INGRESOS": "",
         "RUBRO":    "",
         "SUBRUBRO": "",
@@ -447,6 +696,24 @@ BANCOS = [
         "formatos":  "*.csv *.xls *.xlsx *.txt",
         "load":      _load_icbc,
         "normalize": _normalize_icbc,
+    },
+    {
+        "nombre":    "Mercado Pago",
+        "formatos":  "*.xlsx *.xls *.csv",
+        "load":      _load_mercado_pago,
+        "normalize": _normalize_mercado_pago,
+    },
+    {
+        "nombre":    "Banco Frances",
+        "formatos":  "*.xls *.xlsx",
+        "load":      _load_frances,
+        "normalize": _normalize_frances,
+    },
+    {
+        "nombre":    "Supervielle",
+        "formatos":  "*.xlsx *.xls *.csv",
+        "load":      _load_supervielle,
+        "normalize": _normalize_supervielle,
     },
 ]
 
@@ -491,7 +758,7 @@ def main():
             todos_ingresos.append(df_in)
             resumen.append(f"  {nombre}: {len(df_eg)} egresos, {len(df_in)} ingresos")
         except Exception as exc:
-            messagebox.showerror(f"Error – Banco {nombre}", str(exc))
+            messagebox.showerror(f"Error – Banco {nombre}", f"{exc}\n\n{traceback.format_exc()}")
             continue
 
     if not todos_egresos and not todos_ingresos:
@@ -518,7 +785,7 @@ def main():
             if not df_ingresos.empty:
                 df_ingresos.to_excel(writer, sheet_name="TABLA GENERAL - Ingresos", index=False)
     except Exception as exc:
-        messagebox.showerror("Error al guardar", str(exc))
+        messagebox.showerror("Error al guardar", f"{exc}\n\n{traceback.format_exc()}")
         return
 
     messagebox.showinfo(
